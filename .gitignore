@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production / Electron builds
+dist-electron/
+out/
+build/
+
+# Temporary and log files
+*.log
+*.saving
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
