@@ -51614,6 +51614,7 @@ class TC {
       i = this.drag;
     if (
       ((this.tipBox = null),
+      this.lowLatency ||
       !r ||
         !i ||
         i.k === "erase" ||
@@ -58167,27 +58168,65 @@ function pL({ platform: e }) {
                   ],
                 }),
               te("widths") &&
-                x.jsx("span", {
+                x.jsxs("span", {
                   className: "tb-palette",
                   "aria-label": n.lineWidths,
-                  children: cL.map((D) =>
+                  children: [
+                    cL.map((D) =>
+                      x.jsx(
+                        "button",
+                        {
+                          className: `swatch${d.width === D ? " on" : ""}`,
+                          title: n.width(D),
+                          onClick: () => Pi({ width: D }),
+                          children: x.jsx("span", {
+                            style: {
+                              background: "#111",
+                              width: 4 + D * 1.8,
+                              height: 4 + D * 1.8,
+                            },
+                          }),
+                        },
+                        D,
+                      ),
+                    ),
                     x.jsx(
                       "button",
                       {
-                        className: `swatch${d.width === D ? " on" : ""}`,
-                        title: n.width(D),
-                        onClick: () => Pi({ width: D }),
-                        children: x.jsx("span", {
-                          style: {
-                            background: "#111",
-                            width: 4 + D * 1.8,
-                            height: 4 + D * 1.8,
-                          },
-                        }),
+                        className: `swatch${d.pressure === !1 ? " on" : ""}`,
+                        title:
+                          d.pressure === !1
+                            ? "Đang tắt cảm ứng lực (Nét đều). Bấm để BẬT cảm ứng lực bút."
+                            : "Đang bật cảm ứng lực bút. Bấm để TẮT (Nét vẽ đều nhau).",
+                        onClick: () =>
+                          Pi({ pressure: d.pressure === !1 ? void 0 : !1 }),
+                        style: {
+                          width: "auto",
+                          padding: "0 8px",
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          height: "28px",
+                          borderRadius: "14px",
+                          border:
+                            d.pressure === !1
+                              ? "1.5px solid #2563eb"
+                              : "1px solid #cbd5e1",
+                          background:
+                            d.pressure === !1 ? "#eff6ff" : "transparent",
+                          color:
+                            d.pressure === !1 ? "#1d4ed8" : "#64748b",
+                          cursor: "pointer",
+                          marginLeft: "3px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          whiteSpace: "nowrap",
+                        },
+                        children: d.pressure === !1 ? "Nét đều" : "Lực bút",
                       },
-                      D,
+                      "toggle-pressure",
                     ),
-                  ),
+                  ],
                 }),
               te("highlighter") &&
                 x.jsx("span", {
