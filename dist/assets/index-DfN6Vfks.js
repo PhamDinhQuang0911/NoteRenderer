@@ -51110,8 +51110,8 @@ class TC {
         (a.addEventListener(d, p, f),
           this.disposers.push(() => a.removeEventListener(d, p, f)));
       };
-    (s("pointerdown", (d) => this.down(d)),
-      s("pointermove", (d) => this.move(d)));
+    (s("pointerdown", (d) => this.down(d), { passive: !1 }),
+      s("pointermove", (d) => this.move(d), { passive: !1 }));
     const u = (d) => {
       var p;
       this.lowLatency &&
@@ -51121,7 +51121,14 @@ class TC {
     (a.addEventListener("pointerrawupdate", u),
       this.disposers.push(() => a.removeEventListener("pointerrawupdate", u)),
       s("pointerup", (d) => this.up(d)),
-      s("pointercancel", (d) => this.up(d, !0)),
+      s("pointercancel", (d) => {
+        this.up(d, d.pointerType === "pen" ? !1 : !0);
+      }),
+      s("touchmove", (d) => {
+        if (this.drag && this.drag.k === "ink") {
+          try { d.preventDefault(); } catch {}
+        }
+      }, { passive: !1 }),
       s("pointerleave", () => {
         ((this.penTip = null),
           (this.eraserAt = null),
@@ -53032,9 +53039,22 @@ class TC {
     this.commit({ ...this.doc, dots: t ? void 0 : !1 });
   }
   pressureOf(t) {
-    return (
-      (t.pointerType === "pen" && this.pen.pressure !== !1 && t.pressure) || 0.5
-    );
+    if (this.pen.pressure === !1) return 0.5;
+    if (t.pointerType === "pen") {
+      let raw = typeof t.pressure === "number" && !isNaN(t.pressure) ? t.pressure : 0.5;
+      if (raw <= 0.001) {
+        raw = (typeof this.lastPenPressure === "number" && this.lastPenPressure > 0.05) ? this.lastPenPressure * 0.85 : 0.18;
+      } else {
+        raw = Math.max(0.08, Math.min(0.95, raw));
+      }
+      if (typeof this.lastPenPressure === "number" && this.lastPenPressure > 0) {
+        this.lastPenPressure = this.lastPenPressure * 0.65 + raw * 0.35;
+      } else {
+        this.lastPenPressure = raw;
+      }
+      return this.lastPenPressure;
+    }
+    return 0.5;
   }
   capture(t) {
     try {
@@ -53042,6 +53062,12 @@ class TC {
     } catch {}
   }
   down(t) {
+    if (t.pointerType === "pen" || this.tool.k === "pen" || this.tool.k === "highlighter") {
+      try { t.preventDefault(); } catch {}
+    }
+    if (t.pointerType === "pen") {
+      this.lastPenPressure = (typeof t.pressure === "number" && t.pressure > 0.05) ? t.pressure : 0.18;
+    }
     if (
       (t.pointerType === "pen" && this.inputMode === "touch") ||
       (t.pointerType === "pen" &&
@@ -53461,6 +53487,9 @@ class TC {
     return { x: n.o.x + n.u.x * r, y: n.o.y + n.u.y * r };
   }
   move(t) {
+    if (t.pointerType === "pen" || (this.drag && this.drag.k === "ink")) {
+      try { t.preventDefault(); } catch {}
+    }
     var s;
     if (
       (t.pointerType === "pen" && (this.penAt = performance.now()),
@@ -53846,7 +53875,8 @@ class TC {
       (t.pointerType === "pen" &&
         ((this.penDown = !1),
         (this.penAt = performance.now()),
-        (this.penTip = null)),
+        (this.penTip = null),
+        (this.lastPenPressure = 0)),
       (t.pointerType === "touch" && !this.touches.has(t.pointerId)) ||
         (t.pointerType !== "touch" &&
           this.drag &&
@@ -53854,6 +53884,12 @@ class TC {
           t.pointerId !== this.dragPointer))
     )
       return;
+    if (t.pointerType === "touch" && this.drag && this.dragPointer !== null && this.dragPointer !== t.pointerId) {
+      if (this.touches.has(t.pointerId)) {
+        this.touches.delete(t.pointerId);
+      }
+      return;
+    }
     if ((clearTimeout(this.holdTimer), t.pointerType === "touch")) {
       if (
         (this.touches.delete(t.pointerId),
@@ -53879,7 +53915,7 @@ class TC {
     }
     const r = this.drag;
     if (((this.drag = null), !!r)) {
-      if (n) {
+      if (n && r.k !== "ink") {
         ((this.live = null), this.redraw());
         return;
       }
