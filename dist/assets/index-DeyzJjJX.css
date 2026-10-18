@@ -9,3 +9,81 @@ html, body, #root, .board, .board-scroller, .board-canvas {
   -webkit-user-select: none !important;
   user-select: none !important;
 }
+
+/* Thanh công cụ dọc bên trái (Vertical Left Toolbar) */
+.app.toolbar-left {
+  display: grid !important;
+  grid-template-rows: auto 1fr auto !important;
+  grid-template-columns: auto 1fr !important;
+  grid-template-areas:
+    "tabbar tabbar"
+    "toolbar work"
+    "bottom bottom" !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+}
+.app.toolbar-left .tab-bar {
+  grid-area: tabbar !important;
+  width: 100% !important;
+}
+.app.toolbar-left .toolbar.toolbar-left {
+  grid-area: toolbar !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  width: 60px !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 8px 3px !important;
+  border-bottom: none !important;
+  border-right: 1px solid var(--line) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scrollbar-width: none !important;
+  gap: 6px !important;
+  z-index: 20 !important;
+}
+.app.toolbar-left .toolbar.toolbar-left::-webkit-scrollbar {
+  display: none !important;
+}
+.app.toolbar-left .toolbar.toolbar-left .tb-group {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 4px !important;
+  width: 100% !important;
+}
+.app.toolbar-left .toolbar.toolbar-left .tb-palette {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 44px !important;
+  height: auto !important;
+  padding: 6px 0 !important;
+  margin: 4px 0 !important;
+  border-radius: 22px !important;
+  gap: 6px !important;
+}
+.app.toolbar-left .toolbar.toolbar-left .sep {
+  width: 32px !important;
+  height: 1px !important;
+  margin: 4px 0 !important;
+}
+.app.toolbar-left .toolbar.toolbar-left .tb-title {
+  display: none !important;
+}
+.app.toolbar-left .work {
+  grid-area: work !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+}
+.app.toolbar-left .sheet-bar {
+  grid-area: bottom !important;
+}
+/* Popover căn chỉnh khi thanh công cụ ở bên trái */
+.app.toolbar-left .toolbar.toolbar-left .popover {
+  left: calc(100% + 8px) !important;
+  top: 0 !important;
+  transform: none !important;
+}

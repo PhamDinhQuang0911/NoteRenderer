@@ -58465,7 +58465,7 @@ function QB({ penTypes: e, shapes: t, geoTools: n }) {
     r.hlSlot >= -1 &&
     r.hlSlot < i.hlSlots.length &&
     (i.hlSlot = Math.round(r.hlSlot)),
-    (i.eraser = Un(["stroke", "small", "medium", "large"], r.eraser)),
+    (r.toolbarSide === "left" && (i.toolbarSide = "left")),(i.eraser = Un(["stroke", "small", "medium", "large"], r.eraser)),
     (i.select = Un(["rect", "free", "object"], r.select)));
   const u = r.tool;
   if (u && typeof u == "object") {
@@ -69663,6 +69663,13 @@ function lz({ platform: e }) {
       const M = h.hlSlot ?? tf.indexOf(x);
       return M < tf.length ? M : -1;
     }),
+    [toolbarSide, setToolbarSide] = H.useState(() => h.toolbarSide ?? "top"),
+    [showIpadInstall, setShowIpadInstall] = H.useState(!1),
+    toggleToolbarSide = () => {
+      const next = toolbarSide === "left" ? "top" : "left";
+      setToolbarSide(next);
+      Ct({ toolbarSide: next });
+    },
     [P, z] = H.useState(h.spaceFull ?? !1),
     [I, te] = H.useState(() => [L8()]),
     [ee, Ce] = H.useState(0),
@@ -70921,7 +70928,7 @@ function lz({ platform: e }) {
       return () => clearTimeout(M);
     }, [Xi]),
     g.jsxs("div", {
-      className: "app",
+      className: `app${toolbarSide === "left" ? " toolbar-left" : ""}`,
       children: [
         I.length > 1 &&
           g.jsxs("nav", {
@@ -70964,7 +70971,7 @@ function lz({ platform: e }) {
             ],
           }),
         g.jsxs("header", {
-          className: `toolbar${Kg ? " two-rows" : ""}${ys ? " quick-hidden" : ""}`,
+          className: `toolbar${Kg ? " two-rows" : ""}${ys ? " quick-hidden" : ""}${toolbarSide === "left" ? " toolbar-left" : ""}`,
           ref: bs,
           children: [
             g.jsxs("div", {
@@ -71089,6 +71096,18 @@ function lz({ platform: e }) {
                             },
                             children: n.toolbarTools,
                           }),
+                          g.jsx("button", {
+                            onClick: () => {
+                              (Ge(""), toggleToolbarSide());
+                            },
+                            children: toolbarSide === "left" ? "Vị trí: Ngang trên cùng" : "Vị trí: Dọc bên trái",
+                          }),
+                          g.jsx("button", {
+                            onClick: () => {
+                              (Ge(""), setShowIpadInstall(!0));
+                            },
+                            children: "📲 Cài đặt App iPad (Toàn màn hình)",
+                          }),
                           g.jsxs("button", {
                             className: ys ? "" : "checked",
                             onClick: sh,
@@ -71199,6 +71218,23 @@ function lz({ platform: e }) {
                         title: n.settings,
                         onClick: () => Ne({ k: "settings" }),
                         children: g.jsx(ce.settings, {}),
+                      }),
+                      g.jsx(St, {
+                        title: toolbarSide === "left" ? "Chuyển thanh công cụ lên trên" : "Chuyển thanh công cụ sang dọc bên trái",
+                        onClick: toggleToolbarSide,
+                        children: g.jsx("span", {
+                          style: {
+                            fontSize: "15px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "22px",
+                            height: "22px",
+                            fontWeight: "bold",
+                            color: "var(--muted, #555)",
+                          },
+                          children: toolbarSide === "left" ? "⬆" : "⬅",
+                        }),
                       }),
                     ],
                   }),
@@ -71524,24 +71560,45 @@ function lz({ platform: e }) {
                     className: "tb-palette",
                     "aria-label": n.lineWidths,
                     children: [
-                      ...rz.map((M) =>
-                        g.jsx(
-                          "button",
-                          {
-                            className: `swatch${d.width === M ? " on" : ""}`,
-                            title: n.width(M),
-                            onClick: () => fi({ width: M }),
-                            children: g.jsx("span", {
-                              style: {
-                                background: "#111",
-                                width: 4 + M * 1.8,
-                                height: 4 + M * 1.8,
+                      ...(mt("highlighter")
+                        ? [12, 22, 34].map((M, idx) =>
+                            g.jsx(
+                              "button",
+                              {
+                                className: `swatch${(L === M || (idx === 0 && L <= 16) || (idx === 1 && L > 16 && L <= 26) || (idx === 2 && L > 26)) ? " on" : ""}`,
+                                title: `Độ dày dạ quang: ${M}px`,
+                                onClick: () => gu({ width: M }, K),
+                                children: g.jsx("span", {
+                                  style: {
+                                    background: x,
+                                    opacity: 0.85,
+                                    width: 10 + idx * 5,
+                                    height: 5 + idx * 3,
+                                    borderRadius: "2px",
+                                  },
+                                }),
                               },
-                            }),
-                          },
-                          M,
-                        ),
-                      ),
+                              `hl-w-${M}`,
+                            ),
+                          )
+                        : rz.map((M) =>
+                            g.jsx(
+                              "button",
+                              {
+                                className: `swatch${d.width === M ? " on" : ""}`,
+                                title: n.width(M),
+                                onClick: () => fi({ width: M }),
+                                children: g.jsx("span", {
+                                  style: {
+                                    background: "#111",
+                                    width: 4 + M * 1.8,
+                                    height: 4 + M * 1.8,
+                                  },
+                                }),
+                              },
+                              M,
+                            ),
+                          )),
                       g.jsx(
                         "button",
                         {
@@ -71581,49 +71638,86 @@ function lz({ platform: e }) {
                   g.jsx("span", {
                     className: "tb-palette",
                     "aria-label": n.highlighters,
-                    children: D.map((M, N) =>
-                      g.jsx(
-                        vr,
-                        {
-                          open: gt === "hlslot" && K === N,
-                          setOpen: (U) => Ge(U ? "hlslot" : ""),
-                          button: g.jsx("button", {
-                            className: `swatch${K === N && mt("highlighter") ? " on" : ""}`,
-                            title: `${n.highlighter} · ${M.width}`,
-                            "aria-label": `${n.highlighters} ${M.color}`,
-                            onClick: () => {
-                              const U = K === N && mt("highlighter");
-                              ($(N),
-                                gu(M, N),
-                                Ge(U && gt !== "hlslot" ? "hlslot" : ""));
-                            },
-                            children: g.jsx("span", {
-                              style: {
-                                background: M.color,
-                                width: 22,
-                                height: 22,
+                    children: [
+                      ...D.map((M, N) =>
+                        g.jsx(
+                          vr,
+                          {
+                            open: gt === "hlslot" && K === N,
+                            setOpen: (U) => Ge(U ? "hlslot" : ""),
+                            button: g.jsx("button", {
+                              className: `swatch${K === N && mt("highlighter") ? " on" : ""}`,
+                              title: `Màu dạ quang ${N + 1} (${M.color}) · Bấm để chọn, bấm lần nữa để đổi màu`,
+                              "aria-label": `${n.highlighters} ${M.color}`,
+                              onClick: () => {
+                                const U = K === N && mt("highlighter");
+                                ($(N),
+                                  gu(M, N),
+                                  Ge(U && gt !== "hlslot" ? "hlslot" : ""));
+                              },
+                              children: g.jsx("span", {
+                                style: {
+                                  background: M.color,
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: "4px",
+                                },
+                              }),
+                            }),
+                            children: g.jsx(ef, {
+                              pen: { color: M.color, width: M.width, type: d.type },
+                              onChange: (U) =>
+                                gu(
+                                  {
+                                    ...(U.color ? { color: U.color } : {}),
+                                    ...(U.width ? { width: U.width } : {}),
+                                  },
+                                  N,
+                                ),
+                              highlighter: {
+                                alpha: E,
+                                onAlpha: (U) => gu({ alpha: U }, N),
                               },
                             }),
-                          }),
-                          children: g.jsx(ef, {
-                            pen: { color: x, width: L, type: d.type },
-                            onChange: (U) =>
-                              gu(
-                                {
-                                  ...(U.color ? { color: U.color } : {}),
-                                  ...(U.width ? { width: U.width } : {}),
-                                },
-                                N,
-                              ),
-                            highlighter: {
-                              alpha: E,
-                              onAlpha: (U) => gu({ alpha: U }, N),
+                          },
+                          N,
+                        ),
+                      ),
+                      g.jsx(vr, {
+                        open: gt === "hlpicker",
+                        setOpen: (U) => Ge(U ? "hlpicker" : ""),
+                        button: g.jsx("button", {
+                          className: "swatch custom",
+                          title: "Bảng màu bút dạ quang (Lưu thành 3 màu chính)",
+                          "aria-label": "Đổi màu bút dạ quang",
+                          onClick: () => Ge(gt === "hlpicker" ? "" : "hlpicker"),
+                          children: g.jsx("span", {
+                            style: {
+                              background: "conic-gradient(red, #ff0, #0f0, #0ff, #00f, #f0f, red)",
+                              width: 18,
+                              height: 18,
+                              borderRadius: "50%",
+                              display: "inline-block",
                             },
                           }),
-                        },
-                        N,
-                      ),
-                    ),
+                        }),
+                        children: g.jsx(ef, {
+                          pen: { color: x, width: L, type: d.type },
+                          onChange: (U) =>
+                            gu(
+                              {
+                                ...(U.color ? { color: U.color } : {}),
+                                ...(U.width ? { width: U.width } : {}),
+                              },
+                              K >= 0 ? K : 0,
+                            ),
+                          highlighter: {
+                            alpha: E,
+                            onAlpha: (U) => gu({ alpha: U }, K >= 0 ? K : 0),
+                          },
+                        }),
+                      }),
+                    ],
                   }),
                 $t("dashed") &&
                   g.jsx(St, {
@@ -72822,6 +72916,82 @@ function lz({ platform: e }) {
               (kp(M), M.owned && mi(!1));
             },
             onClose: Ia ? () => mi(!1) : void 0,
+          }),
+        showIpadInstall &&
+          g.jsx("div", {
+            className: "dialog-backdrop",
+            onClick: () => setShowIpadInstall(!1),
+            children: g.jsxs("div", {
+              className: "dialog",
+              style: { maxWidth: "480px", lineHeight: "1.6" },
+              onClick: (e) => e.stopPropagation(),
+              children: [
+                g.jsxs("div", {
+                  className: "dialog-head",
+                  children: [
+                    g.jsx("h2", { style: { margin: 0, fontSize: "17px" }, children: "📲 Cài đặt App trên iPad (Toàn màn hình)" }),
+                    g.jsx("button", {
+                      className: "btn ghost icon",
+                      style: { border: "none", background: "none", fontSize: "16px", cursor: "pointer" },
+                      onClick: () => setShowIpadInstall(!1),
+                      children: "✕",
+                    }),
+                  ],
+                }),
+                g.jsxs("div", {
+                  className: "dialog-body",
+                  style: { padding: "16px 20px" },
+                  children: [
+                    g.jsx("p", {
+                      style: { marginBottom: "12px", color: "#333" },
+                      children: "Để sử dụng NoteRenderer chạy toàn màn hình 100% trên iPad (không còn thanh URL hay thanh tìm kiếm trình duyệt):",
+                    }),
+                    g.jsxs("ol", {
+                      style: { paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "10px", color: "#111" },
+                      children: [
+                        g.jsxs("li", {
+                          children: [
+                            "Mở trang này trên Safari bằng iPad, bấm nút ",
+                            g.jsx("b", { children: "Chia sẻ" }),
+                            " (biểu tượng hình vuông có mũi tên ",
+                            g.jsx("b", { children: "[↑]" }),
+                            " ở góc trên bên phải Safari).",
+                          ],
+                        }),
+                        g.jsxs("li", {
+                          children: [
+                            "Cuộn xuống trong danh sách và chọn ",
+                            g.jsx("b", { style: { color: "#0066cc" }, children: "Thêm vào MH chính" }),
+                            " (Add to Home Screen).",
+                          ],
+                        }),
+                        g.jsxs("li", {
+                          children: [
+                            "Bấm ",
+                            g.jsx("b", { children: "Thêm" }),
+                            " (Add) ở góc trên bên phải.",
+                          ],
+                        }),
+                      ],
+                    }),
+                    g.jsx("div", {
+                      style: { marginTop: "16px", padding: "12px", background: "#f0f7ff", borderLeft: "4px solid #0066cc", borderRadius: "4px", fontSize: "13px" },
+                      children: "🎉 Biểu tượng NoteRenderer sẽ xuất hiện trên màn hình chính iPad. Khi mở từ icon này, ứng dụng sẽ chạy độc lập toàn màn hình như một App cài đặt từ App Store!",
+                    }),
+                  ],
+                }),
+                g.jsx("div", {
+                  className: "dialog-foot",
+                  style: { padding: "10px 20px", display: "flex", justifyContent: "flex-end" },
+                  children: g.jsx("button", {
+                    className: "btn primary",
+                    style: { padding: "8px 18px", borderRadius: "6px", background: "#0066cc", color: "#fff", border: "none", cursor: "pointer", fontWeight: "600" },
+                    onClick: () => setShowIpadInstall(!1),
+                    children: "Đã hiểu",
+                  }),
+                }),
+              ],
+            }),
           }),
       ],
     })
