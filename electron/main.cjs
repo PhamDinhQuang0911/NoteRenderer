@@ -1,12 +1,20 @@
 const path = require("path");
 const fs = require("fs");
-const { app, BrowserWindow, ipcMain, clipboard, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, clipboard, shell, dialog } = require("electron");
 const { renderFormula } = require("./formula.cjs");
 const {
+  sanitizeName,
+  parseRef,
+  buildRef,
+  getFilePathFromRef,
   readNotebook,
+  saveNotebookSync,
+  listLibrary,
+  createNotebook,
   handleOpenFile,
-  handleSaveFile,
-  handleExportPng,
+  handleSaveElsewhere,
+  handleExportPngFolder,
+  handleExportPngPage,
   handleExportPdf
 } = require("./files.cjs");
 
@@ -19,24 +27,60 @@ try {
   console.error("Could not create notes directory:", e);
 }
 
+// Window state caching
+const windowConfigFile = path.join(app.getPath("userData"), "window-state.json");
+function loadWindowState() {
+  try {
+    if (fs.existsSync(windowConfigFile)) {
+      return JSON.parse(fs.readFileSync(windowConfigFile, "utf8"));
+    }
+  } catch {}
+  return { width: 1280, height: 850, maximized: false };
+}
+
+function saveWindowState(win) {
+  try {
+    if (win && !win.isDestroyed()) {
+      const isMax = win.isMaximized();
+      const bounds = isMax ? win.getNormalBounds() : win.getBounds();
+      fs.writeFileSync(
+        windowConfigFile,
+        JSON.stringify({ ...bounds, maximized: isMax })
+      );
+    }
+  } catch {}
+}
+
 const openWindows = new Set();
 
 function createWindow(filePath = null) {
+  const state = loadWindowState();
   const win = new BrowserWindow({
-    width: 1280,
-    height: 850,
+    width: state.width || 1280,
+    height: state.height || 850,
     minWidth: 800,
     minHeight: 600,
     title: "NoteRenderer",
+    backgroundColor: "#ffffff",
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: false
+      sandbox: false,
+      webSecurity: false
     }
   });
 
+  if (state.maximized) {
+    win.maximize();
+  }
+
   openWindows.add(win);
+
+  win.on("close", () => {
+    saveWindowState(win);
+  });
 
   win.on("closed", () => {
     openWindows.delete(win);
@@ -59,16 +103,47 @@ function createWindow(filePath = null) {
   return win;
 }
 
-// Lifecycle events
-app.whenReady().then(() => {
-  createWindow();
+// Pen button native listener
+try {
+  const penButtonPath = path.join(process.resourcesPath || __dirname, "pen-button.node");
+  if (fs.existsSync(penButtonPath)) {
+    const penButton = require(penButtonPath);
+    if (penButton && typeof penButton.listen === "function") {
+      penButton.listen(() => {
+        const focused = BrowserWindow.getFocusedWindow();
+        if (focused && !focused.isDestroyed()) {
+          focused.webContents.send("pen-button");
+        }
+      });
+    }
+  }
+} catch (e) {
+  // Optional native addon
+}
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+// App lifecycle
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (event, commandLine) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
     }
   });
-});
+
+  app.whenReady().then(() => {
+    createWindow();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
@@ -76,10 +151,8 @@ app.on("window-all-closed", () => {
   }
 });
 
-// IPC handlers & listeners
-ipcMain.on("renderer-ready", () => {
-  // Renderer initialized
-});
+// IPC event listeners
+ipcMain.on("renderer-ready", () => {});
 
 ipcMain.on("set-dirty", (event, isDirty) => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -88,12 +161,13 @@ ipcMain.on("set-dirty", (event, isDirty) => {
   }
 });
 
-ipcMain.on("set-autosave", (event, val) => {
-  // Autosave configuration
-});
+ipcMain.on("set-autosave", () => {});
 
-ipcMain.on("forget-file", (event, filePath) => {
-  // Discard file associations
+ipcMain.on("set-title", (event, title) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && title) {
+    win.setTitle(String(title));
+  }
 });
 
 ipcMain.on("new-window", () => {
@@ -115,34 +189,22 @@ ipcMain.on("close-ready", (event) => {
   if (win) win.destroy();
 });
 
-ipcMain.on("set-language", (event, lang) => {
-  // Language updated
-});
+ipcMain.on("set-language", () => {});
 
 // IPC Invocations
-ipcMain.handle("app-version", () => {
-  return app.getVersion();
-});
+ipcMain.handle("app-version", () => "0.4.7");
 
 ipcMain.handle("license-status", () => {
-  // Permanent unlocked status for the author
+  // Author unlocked status
   return {
     activated: true,
     trial: { state: "active", daysLeft: 9999 }
   };
 });
 
-ipcMain.handle("license-activate", () => {
-  return { activated: true };
-});
-
-ipcMain.handle("license-trial", () => {
-  return { activated: true };
-});
-
-ipcMain.handle("check-update", () => {
-  return { updateAvailable: false };
-});
+ipcMain.handle("license-activate", () => ({ activated: true }));
+ipcMain.handle("license-trial", () => ({ activated: true }));
+ipcMain.handle("check-update", () => ({ updateAvailable: false }));
 
 ipcMain.handle("render-formula", (event, formula, color, display) => {
   return renderFormula(formula, color, display);
@@ -153,14 +215,36 @@ ipcMain.handle("open-file", async (event) => {
   return await handleOpenFile(win, currentNotesFolder);
 });
 
-ipcMain.handle("save-file", async (event, data, currentPath) => {
+ipcMain.handle("save-elsewhere", async (event, data, defaultName) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  return await handleSaveFile(win, data, currentPath, currentNotesFolder);
+  return await handleSaveElsewhere(win, data, defaultName, currentNotesFolder);
 });
 
-ipcMain.handle("export-png", async (event, dataUrl) => {
+ipcMain.handle("notes-folder", () => currentNotesFolder);
+
+ipcMain.handle("choose-notes-folder", async () => {
+  const res = await dialog.showOpenDialog({
+    properties: ["openDirectory", "createDirectory"],
+    defaultPath: currentNotesFolder
+  });
+  if (!res.canceled && res.filePaths.length > 0) {
+    currentNotesFolder = res.filePaths[0];
+  }
+  return currentNotesFolder;
+});
+
+ipcMain.handle("open-notes-folder", () => {
+  shell.openPath(currentNotesFolder);
+  return true;
+});
+
+ipcMain.handle("export-png-folder", async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  return await handleExportPng(win, dataUrl, currentNotesFolder);
+  return await handleExportPngFolder(win, currentNotesFolder);
+});
+
+ipcMain.handle("export-png-page", async (event, dataUrl, name) => {
+  return await handleExportPngPage(dataUrl, name);
 });
 
 ipcMain.handle("export-pdf", async (event, pdfData) => {
@@ -178,28 +262,6 @@ ipcMain.handle("clipboard-image", () => {
 
 ipcMain.handle("copy-text", (event, text) => {
   clipboard.writeText(text || "");
-  return true;
-});
-
-ipcMain.handle("notes-folder", () => {
-  return currentNotesFolder;
-});
-
-ipcMain.handle("choose-notes-folder", async () => {
-  const { dialog } = require("electron");
-  const res = await dialog.showOpenDialog({
-    properties: ["openDirectory", "createDirectory"],
-    defaultPath: currentNotesFolder
-  });
-  if (!res.canceled && res.filePaths.length > 0) {
-    currentNotesFolder = res.filePaths[0];
-    return currentNotesFolder;
-  }
-  return currentNotesFolder;
-});
-
-ipcMain.handle("open-notes-folder", () => {
-  shell.openPath(currentNotesFolder);
   return true;
 });
 
@@ -231,10 +293,7 @@ ipcMain.handle("recognize-handwriting", async (event, payload) => {
           });
         }
       );
-      req.on("error", (e) => {
-        console.error("Handwriting API request error:", e);
-        resolve(null);
-      });
+      req.on("error", () => resolve(null));
       req.on("timeout", () => {
         req.destroy();
         resolve(null);
@@ -247,3 +306,109 @@ ipcMain.handle("recognize-handwriting", async (event, payload) => {
   });
 });
 
+// Library IPC Handlers
+ipcMain.handle("lib-list", () => {
+  return listLibrary(currentNotesFolder);
+});
+
+ipcMain.handle("lib-read", (event, ref) => {
+  const filePath = getFilePathFromRef(currentNotesFolder, ref);
+  if (!filePath || !fs.existsSync(filePath)) {
+    throw new Error("Notebook not found: " + ref);
+  }
+  return readNotebook(filePath);
+});
+
+ipcMain.handle("lib-write", (event, ref, data) => {
+  const filePath = getFilePathFromRef(currentNotesFolder, ref);
+  if (!filePath) throw new Error("Invalid ref: " + ref);
+  saveNotebookSync(data, filePath);
+  return true;
+});
+
+ipcMain.handle("lib-create", (event, data, project, name) => {
+  return createNotebook(currentNotesFolder, data, project, name);
+});
+
+ipcMain.handle("lib-add-project", (event, name) => {
+  const proj = sanitizeName(name);
+  if (!proj) throw new Error("Invalid project name");
+  const dir = path.join(currentNotesFolder, proj);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return proj;
+});
+
+ipcMain.handle("lib-rename-project", (event, oldName, newName) => {
+  const oldProj = sanitizeName(oldName);
+  const newProj = sanitizeName(newName);
+  if (!oldProj || !newProj) throw new Error("Invalid project name");
+  const oldDir = path.join(currentNotesFolder, oldProj);
+  const newDir = path.join(currentNotesFolder, newProj);
+  if (fs.existsSync(newDir)) {
+    const err = new Error("Project name already exists");
+    err.name = "nameTaken";
+    throw err;
+  }
+  if (fs.existsSync(oldDir)) {
+    fs.renameSync(oldDir, newDir);
+  }
+  return newProj;
+});
+
+ipcMain.handle("lib-remove-project", async (event, name) => {
+  const proj = sanitizeName(name);
+  if (!proj) return false;
+  const dir = path.join(currentNotesFolder, proj);
+  if (fs.existsSync(dir)) {
+    await shell.trashItem(dir);
+  }
+  return true;
+});
+
+ipcMain.handle("lib-rename", (event, ref, newName) => {
+  const { project, name: oldName } = parseRef(ref);
+  const cleanNewName = sanitizeName(newName);
+  if (!cleanNewName) throw new Error("Invalid notebook name");
+  const dir = project ? path.join(currentNotesFolder, project) : currentNotesFolder;
+  const oldFile = path.join(dir, `${oldName}.nrn`);
+  const newFile = path.join(dir, `${cleanNewName}.nrn`);
+  if (fs.existsSync(newFile) && oldFile.toLowerCase() !== newFile.toLowerCase()) {
+    const err = new Error("Notebook name already exists");
+    err.name = "nameTaken";
+    throw err;
+  }
+  if (fs.existsSync(oldFile)) {
+    fs.renameSync(oldFile, newFile);
+  }
+  return buildRef(project, cleanNewName);
+});
+
+ipcMain.handle("lib-move", (event, ref, toProject) => {
+  const { project: fromProject, name } = parseRef(ref);
+  const targetProject = sanitizeName(toProject);
+  const sourceDir = fromProject ? path.join(currentNotesFolder, fromProject) : currentNotesFolder;
+  const targetDir = targetProject ? path.join(currentNotesFolder, targetProject) : currentNotesFolder;
+
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  const sourceFile = path.join(sourceDir, `${name}.nrn`);
+  const targetFile = path.join(targetDir, `${name}.nrn`);
+
+  if (fs.existsSync(sourceFile)) {
+    fs.renameSync(sourceFile, targetFile);
+  }
+
+  return buildRef(targetProject, name);
+});
+
+ipcMain.handle("lib-remove", async (event, ref) => {
+  const filePath = getFilePathFromRef(currentNotesFolder, ref);
+  if (filePath && fs.existsSync(filePath)) {
+    await shell.trashItem(filePath);
+  }
+  return true;
+});
