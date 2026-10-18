@@ -53728,11 +53728,9 @@ class YB {
       this.disposers.push(() => clearTimeout(this.pointerTimer)));
     const l = (h) => {
       var d;
-      this.lowLatency &&
-        ((d = this.drag) == null ? void 0 : d.k) === "ink" &&
-        this.move(h);
+      ((d = this.drag) == null ? void 0 : d.k) === "ink" && this.move(h);
     };
-    (o.addEventListener("pointerrawupdate", l),
+    (o.addEventListener("pointerrawupdate", l, { passive: !1 }),
       this.disposers.push(() => o.removeEventListener("pointerrawupdate", l)),
       s("pointerup", (h) => this.up(h)),
       s("pointercancel", (h) => {
@@ -53910,7 +53908,7 @@ class YB {
   context() {
     return this.canvas.getContext("2d", {
       alpha: !1,
-      desynchronized: this.lowLatency,
+      desynchronized: !1,
     });
   }
   setFingerDraw(t) {
@@ -56446,11 +56444,17 @@ class YB {
       this.scroller.setPointerCapture(t);
     } catch {}
   }
+  release(t) {
+    try {
+      this.scroller.releasePointerCapture(t);
+    } catch {}
+  }
   down(t) {
     if (t.pointerType === "pen" || this.tool.k === "pen" || this.tool.k === "highlighter") {
       try { t.preventDefault(); } catch {}
     }
     if (t.pointerType === "pen") {
+      this.capture(t.pointerId);
       this.lastPenPressure = (typeof t.pressure === "number" && t.pressure > 0.05) ? t.pressure : 0.18;
     }
     if (
@@ -57346,13 +57350,8 @@ class YB {
     s.k === "ink" ? this.paintSoon() : this.redraw();
   }
   paintSoon() {
-    if (!(this.lowLatency && !this.needFull && this.paintWet())) {
-      if (!this.lowLatency || performance.now() - this.lastPaint < 5)
-        return this.schedule();
-      (this.frame && (cancelAnimationFrame(this.frame), (this.frame = 0)),
-        (this.needFull = !1),
-        this.paint());
-    }
+    if (!this.needFull && this.paintWet()) return;
+    this.schedule();
   }
   wetStroke() {
     const t = this.drag;
@@ -57536,7 +57535,8 @@ class YB {
         ((this.penDown = !1),
         (this.penAt = performance.now()),
         (this.penTip = null),
-        (this.lastPenPressure = 0)),
+        (this.lastPenPressure = 0),
+        this.release(t.pointerId)),
       (t.pointerType === "touch" && !this.touches.has(t.pointerId)) ||
         (t.pointerType !== "touch" &&
           this.drag &&
@@ -59787,7 +59787,7 @@ function vP({
           (A.current && u && n(u), (A.current = null));
         },
         children: [
-          g.jsx("span", { className: "calc-name", children: f.calcName }),
+          g.jsxs("span", { className: "calc-name", children: [g.jsx("span", { className: "casio-logo", children: "CASIO" }), g.jsxs("span", { className: "classwiz-wrap", children: [g.jsx("span", { className: "classwiz-logo", children: "CLASSWIZ" }), g.jsx("span", { className: "casio-model", children: "fx-580VN X" })] }), g.jsx("span", { className: "casio-solar" })] }),
           g.jsx("button", {
             className: "calc-close",
             "aria-label": f.close,
