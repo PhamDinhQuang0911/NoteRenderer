@@ -44,7 +44,11 @@ function readNotebook(filePath) {
   } else {
     jsonStr = raw.toString("utf8");
   }
-  return JSON.parse(jsonStr);
+  const json = JSON.parse(jsonStr);
+  if (json && json.doc && Array.isArray(json.doc.pages)) {
+    return json.doc;
+  }
+  return json;
 }
 
 function saveNotebookSync(data, targetPath) {
@@ -52,11 +56,19 @@ function saveNotebookSync(data, targetPath) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  const buf = Buffer.isBuffer(data)
-    ? data
-    : typeof data === "string"
-      ? Buffer.from(data, "utf8")
-      : Buffer.from(JSON.stringify(data), "utf8");
+  let buf;
+  if (Buffer.isBuffer(data)) {
+    buf = data;
+  } else if (data instanceof Uint8Array) {
+    buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+  } else if (typeof data === "string") {
+    buf = Buffer.from(data, "utf8");
+  } else if (data && typeof data === "object") {
+    const payload = data.format ? data : { format: "NoteRenderer", version: 1, doc: data };
+    buf = Buffer.from(JSON.stringify(payload), "utf8");
+  } else {
+    buf = Buffer.from(String(data || ""), "utf8");
+  }
 
   const gzipped = buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b ? buf : zlib.gzipSync(buf);
   const tmpPath = `${targetPath}.saving`;

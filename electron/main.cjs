@@ -87,13 +87,22 @@ function createWindow(filePath = null) {
   });
 
   const distIndex = path.join(__dirname, "..", "dist", "index.html");
+  
+  win.webContents.on("console-message", (event, level, message, line, sourceId) => {
+    fs.appendFileSync("C:/Users/ADMIN/Desktop/New folder/renderer.log", `[LVL ${level}] ${message} (${sourceId}:${line})\n`);
+  });
+  win.webContents.on("did-fail-load", (event, errorCode, errorDescription) => {
+    fs.appendFileSync("C:/Users/ADMIN/Desktop/New folder/renderer.log", `[FAIL LOAD] ${errorCode}: ${errorDescription}\n`);
+  });
   win.loadFile(distIndex);
+
 
   win.webContents.on("did-finish-load", () => {
     if (filePath && fs.existsSync(filePath)) {
       try {
-        const fileData = readNotebook(filePath);
-        win.webContents.send("open-doc", fileData);
+        const doc = readNotebook(filePath);
+        const name = path.basename(filePath, ".nrn");
+        win.webContents.send("open-doc", { doc, name, ref: null });
       } catch (err) {
         console.error("Failed to load notebook:", err);
       }
