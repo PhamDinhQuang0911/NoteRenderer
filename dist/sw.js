@@ -1,4 +1,4 @@
-const CACHE_NAME = 'noterenderer-pwa-v1';
+const CACHE_NAME = 'noterenderer-pwa-v051';
 const PRECACHE_ASSETS = [
   './',
   './index.html',
@@ -21,7 +21,6 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Network first, fallback to cache for offline support
   if (e.request.method !== 'GET') return;
   e.respondWith(
     fetch(e.request).catch(() => caches.match(e.request))

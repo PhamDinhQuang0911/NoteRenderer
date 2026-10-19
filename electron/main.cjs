@@ -192,7 +192,7 @@ ipcMain.on("close-ready", (event) => {
 ipcMain.on("set-language", () => {});
 
 // IPC Invocations
-ipcMain.handle("app-version", () => "0.4.7");
+ipcMain.handle("app-version", () => "0.5.1");
 
 ipcMain.handle("license-status", () => {
   // Author unlocked status
