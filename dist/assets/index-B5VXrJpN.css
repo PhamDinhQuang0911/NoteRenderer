@@ -77,3 +77,45 @@
   top: 0 !important;
   transform: none !important;
 }
+
+/* Tối ưu thanh công cụ 2 dòng cho màn hình nhỏ & iPad */
+.toolbar.two-rows {
+  height: auto !important;
+  min-height: 80px !important;
+  padding: 4px 8px 6px !important;
+  row-gap: 4px !important;
+  flex-wrap: wrap !important;
+}
+.toolbar.two-rows .tb-group.tools {
+  order: 3 !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  row-gap: 5px !important;
+  column-gap: 4px !important;
+  border-top: 1px solid var(--line) !important;
+  padding-top: 5px !important;
+  overflow: visible !important;
+}
+.mobile .toolbar.two-rows .tb-group.tools {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  overflow-x: visible !important;
+}
+.mobile .toolbar.two-rows .tb-group.tools .tb,
+.mobile .toolbar.two-rows .tb-group.tools button.swatch {
+  min-width: 38px !important;
+  height: 38px !important;
+}
+/* Touch & Gesture Prevention for iPad Apple Pencil */
+.board, .board-scroller, .board-canvas, .work {
+  touch-action: none !important;
+  -webkit-touch-callout: none !important;
+  overscroll-behavior: none !important;
+}
+html.mobile, body {
+  -webkit-touch-callout: none !important;
+  overscroll-behavior: none !important;
+}
