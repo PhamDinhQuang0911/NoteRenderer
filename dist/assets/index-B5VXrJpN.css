@@ -119,3 +119,15 @@ html.mobile, body {
   -webkit-touch-callout: none !important;
   overscroll-behavior: none !important;
 }
+
+/* Khóa toàn bộ cử chỉ vuốt ngang / gesture trên iPad & Safari */
+html, body, #root, .app, .work, .board, .board-scroller, .board-canvas {
+  overscroll-behavior: none !important;
+  overscroll-behavior-x: none !important;
+  overscroll-behavior-y: none !important;
+  -webkit-overscroll-behavior: none !important;
+  touch-action: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
