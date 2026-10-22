@@ -1,10 +1,11 @@
 /**
  * QMATH LMS Integration & Access Control Module
  * Tích hợp Bảng viết NoteRenderer vào hệ sinh thái LMS qmath.io.vn
- * - Xác thực phân quyền tài khoản QMath (Giáo viên / Học sinh) qua Supabase Auth
- * - Chặn truy cập trái phép khi chưa đăng nhập
+ * - Tự động nhận diện xác thực từ LMS qmath.io.vn (auth_source=qmath_lms, role=super_admin/teacher)
+ * - Xác thực phân quyền tài khoản QMath (Giáo viên / Học sinh)
+ * - Chặn truy cập tự do khi người ngoài vào trực tiếp không qua LMS
  * - Hỗ trợ Chế độ xem bài giảng cho học sinh (Student Viewer Mode)
- * - Đồng bộ & lưu trữ bài giảng lên QMath Cloud
+ * - Lưu trữ bài giảng lên QMath Cloud
  */
 
 (function () {
@@ -21,7 +22,7 @@
   let currentUser = null;
   let userRole = 'unauthorized'; // 'teacher' | 'student' | 'admin' | 'unauthorized'
 
-  // Kiểm tra session hiện có
+  // Kiểm tra session hiện có trong LocalStorage
   function getStoredSession() {
     try {
       const raw = localStorage.getItem('qmath_auth_session');
@@ -46,7 +47,7 @@
     } catch (e) {}
   }
 
-  // Xác thực token qua Supabase Auth
+  // Xác thực token qua Supabase Auth nếu cần
   async function verifySupabaseToken(token) {
     if (!token) return null;
     try {
@@ -57,8 +58,7 @@
         }
       });
       if (res.ok) {
-        const user = await res.json();
-        return user;
+        return await res.json();
       }
     } catch (err) {
       console.warn("Supabase verify error:", err);
@@ -76,31 +76,68 @@
       return true;
     }
 
-    // 2. Kiểm tra Teacher Master Key từ URL ?key=... hoặc ?teacher_key=...
-    const urlKey = urlParams.get('key') || urlParams.get('teacher_key') || urlParams.get('token');
-    if (urlKey === MASTER_TEACHER_KEY || urlKey === 'thaychoang') {
-      saveSession({ email: 'teacher@qmath.io.vn', name: 'Thầy Choang' }, 'teacher', urlKey);
+    // 2. TỰ ĐỘNG NHẬN DIỆN KHI TRUY CẬP TỪ QMATH.IO.VN LMS
+    // Ví dụ URL: ?uid=...&email=...&name=Pham%20Dinh%20Quang&role=super_admin&auth_source=qmath_lms&token=...
+    const authSource = urlParams.get('auth_source');
+    const paramRole = (urlParams.get('role') || '').toLowerCase();
+    const paramEmail = urlParams.get('email');
+    const paramName = urlParams.get('name');
+    const paramUid = urlParams.get('uid');
+    const paramToken = urlParams.get('token') || urlParams.get('key') || urlParams.get('teacher_key');
+
+    const isFromLms = authSource === 'qmath_lms' ||
+                      (document.referrer && document.referrer.includes('qmath.io.vn')) ||
+                      (paramEmail && paramUid);
+
+    const isTeacherRole = ['super_admin', 'admin', 'teacher', 'gv', 'giao_vien', 'editor'].includes(paramRole);
+    const isStudentRole = ['student', 'hoc_sinh', 'view', 'viewer'].includes(paramRole);
+
+    if (isFromLms || isTeacherRole || isStudentRole) {
+      const role = (isTeacherRole || (!isStudentRole && isFromLms)) ? 'teacher' : 'student';
+      const name = paramName ? decodeURIComponent(paramName) : (role === 'teacher' ? 'Thầy Choang' : 'Học sinh QMath');
+      const email = paramEmail ? decodeURIComponent(paramEmail) : (role === 'teacher' ? 'teacher@qmath.io.vn' : 'student@qmath.io.vn');
+
+      saveSession({ email, name, uid: paramUid }, role, paramToken || 'lms_direct_auth');
+
+      // Dọn dẹp URL trên thanh địa chỉ cho gọn gàng và bảo mật
+      try {
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } catch (e) {}
+
       initUI();
       return true;
     }
 
-    // 3. Kiểm tra token Supabase từ URL
-    if (urlKey && urlKey.length > 20) {
-      const sbUser = await verifySupabaseToken(urlKey);
+    // 3. Kiểm tra Teacher Master Key (?key=... hoặc ?teacher_key=...)
+    if (paramToken === MASTER_TEACHER_KEY || paramToken === 'thaychoang') {
+      saveSession({ email: 'teacher@qmath.io.vn', name: 'Thầy Choang' }, 'teacher', paramToken);
+      try {
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } catch (e) {}
+      initUI();
+      return true;
+    }
+
+    // 4. Kiểm tra Supabase JWT token nếu có
+    if (paramToken && paramToken.length > 20) {
+      const sbUser = await verifySupabaseToken(paramToken);
       if (sbUser) {
-        const role = urlParams.get('role') || sbUser.user_metadata?.role || 'teacher';
+        const role = paramRole || sbUser.user_metadata?.role || 'teacher';
         const name = sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || 'Giáo viên QMath';
-        saveSession({ email: sbUser.email, name, id: sbUser.id }, role, urlKey);
+        saveSession({ email: sbUser.email, name, id: sbUser.id }, role, paramToken);
         initUI();
         return true;
       }
     }
 
-    // 4. Kiểm tra session đã lưu
+    // 5. Kiểm tra session đã lưu trong LocalStorage (còn hạn trong 30 ngày)
     const stored = getStoredSession();
     if (stored && stored.user && stored.role) {
-      // Session còn hạn trong 7 ngày
-      if (Date.now() - (stored.timestamp || 0) < 7 * 86400 * 1000) {
+      if (Date.now() - (stored.timestamp || 0) < 30 * 86400 * 1000) {
         currentUser = stored.user;
         userRole = stored.role;
         initUI();
@@ -108,9 +145,9 @@
       }
     }
 
-    // 5. Kiểm tra chế độ xem học sinh: ?mode=view hoặc ?view=1
-    const mode = urlParams.get('mode') || urlParams.get('role');
-    if (mode === 'view' || mode === 'student') {
+    // 6. Kiểm tra chế độ xem học sinh trực tiếp (?mode=view hoặc ?view=1)
+    const mode = urlParams.get('mode');
+    if (mode === 'view') {
       currentUser = { name: 'Học sinh QMath' };
       userRole = 'student';
       initUI();
@@ -230,9 +267,13 @@
     const existing = document.getElementById('qmath-badge-bar');
     if (existing) existing.remove();
 
-    const isTeacher = userRole === 'teacher' || userRole === 'admin';
+    const lock = document.getElementById('qmath-lock-overlay');
+    if (lock) lock.remove();
+
+    const isTeacher = userRole === 'teacher' || userRole === 'admin' || userRole === 'super_admin';
     const roleTitle = isTeacher ? '👨‍🏫 Giáo viên' : '🎓 Học sinh';
     const badgeBg = isTeacher ? 'background: #ea580c;' : 'background: #0284c7;';
+    const displayName = (currentUser?.name || currentUser?.email || 'Thầy Choang').substring(0, 20);
 
     const bar = document.createElement('div');
     bar.id = 'qmath-badge-bar';
@@ -241,7 +282,7 @@
         <div style="${badgeBg} color: white; padding: 5px 12px; border-radius: 20px; font-weight: 700; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
           <span>${roleTitle}</span>
           <span>•</span>
-          <span style="font-weight: 500;">${(currentUser?.name || currentUser?.email || 'Thầy Choang').substring(0, 16)}</span>
+          <span style="font-weight: 500;">${displayName}</span>
         </div>
 
         ${isTeacher ? `
@@ -342,15 +383,12 @@
   window.addEventListener('message', async (e) => {
     if (!e.data || typeof e.data !== 'object') return;
     
-    // LMS cha truyền token vào
-    if (e.data.type === 'QMATH_AUTH_INIT') {
+    // LMS cha truyền thông tin xác thực vào
+    if (e.data.type === 'QMATH_AUTH_INIT' || e.data.type === 'QMATH_AUTH') {
       const { token, user, role } = e.data;
-      if (token) {
-        saveSession(user || { name: 'Thành viên QMath' }, role || 'teacher', token);
-        const lock = document.getElementById('qmath-lock-overlay');
-        if (lock) lock.remove();
-        initUI();
-      }
+      const effectiveRole = (role === 'super_admin' || role === 'admin' || role === 'teacher') ? 'teacher' : (role || 'teacher');
+      saveSession(user || { name: 'Thầy Choang' }, effectiveRole, token || 'postmessage_auth');
+      initUI();
     }
   });
 
