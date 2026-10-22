@@ -1,36 +1,33 @@
 # Báo Cáo Tổng Hợp Các Chức Năng Tinh Chỉnh & Bổ Sung (So Với Bản Gốc NoteRenderer 0.5.1)
 
 Tài liệu này tổng hợp toàn bộ các tính năng mới, các cải tiến và bản vá kỹ thuật đã được thực hiện trên ứng dụng **NoteRenderer (v0.5.1)** cho cả hai phiên bản:
-- **Bản Desktop Windows**: `app_unpacked_051/NoteRenderer.exe`
-- **Bản Web PWA**: Kho mã nguồn `NoteRenderer_Source` (Triển khai tại `https://note.qmath.io.vn`)
+- **Bản Desktop Windows**: [NoteRenderer.exe](file:///C:/Users/ADMIN/Desktop/New%20folder/app_unpacked_051/NoteRenderer.exe) tại `app_unpacked_051`
+- **Bản Web PWA**: Kho mã nguồn [NoteRenderer_Source](https://github.com/PhamDinhQuang0911/NoteRenderer.git) (Triển khai trực tiếp tại [https://note.qmath.io.vn](https://note.qmath.io.vn))
 
 ---
 
-## 1. Chức năng Tô màu bổ sung: Tô theo đầu mút / điểm khép kín (Endpoint & Vertex Snap Fill)
+## 1. Cơ Chế Tô Màu Thông Minh Hợp Nhất (Smart Unified Fill: Tự Động & Thủ Công)
 
-*Bổ sung phương thức tô màu thứ hai bên cạnh phương thức tô vùng kín pixel truyền thống.*
+*Tối ưu hóa toàn diện trải nghiệm người dùng: Không cần thao tác chuyển đổi rườm rà trong menu con. Ứng dụng tự động nhận diện ý định của người dùng dựa trên vị trí chạm.*
 
-- **Cơ chế hoạt động**:
-  - Người dùng mở công cụ Tô màu (`Fill`), chọn chế độ **"Tô chọn đầu mút / đỉnh khép kín"**.
-  - Người dùng chạm lần lượt các điểm mút trên màn hình để xác định ranh giới vùng phẳng cần tô.
-- **Tự động bắt dính thông minh (Smart Snapping)**:
-  - Tự động bắt dính vào **đầu mút của các nét vẽ / đoạn thẳng** (`strokes`) do người dùng vẽ trên trang.
-  - Tự động bắt dính vào **đỉnh các hình học** (tam giác, tứ giác, đa giác, góc khung hình chữ nhật).
+- **Nhận diện Thông minh 2-trong-1 (Mặc định: Tự động thông minh)**:
+  - **Khi bấm vào vùng không gian kín**: Ứng dụng tự động phát hiện đường biên bao quanh và thực hiện **tô tự động tức thời** (Flood fill) chỉ với 1 chạm duy nhất.
+  - **Khi bấm vào đầu mút điểm / đỉnh**: Ứng dụng tự động kích hoạt **chế độ tô thủ công theo đầu mút / đỉnh khép kín** mà không cần mở menu dropdown.
+- **Tự động bắt dính đầu mút (Smart Snapping)**:
+  - Tự động bắt dính vào **đầu mút các nét vẽ, đoạn thẳng** (`strokes`).
+  - Tự động bắt dính vào **đỉnh các hình khối** (tam giác, tứ giác, đa giác, các góc khung chữ nhật).
   - Tự động bắt dính vào **các điểm hình học** (`geo points`).
-  - Nếu không ở gần đầu mút nào, vị trí chạm sẽ được dùng làm điểm tự do.
-- **Phản hồi thị giác trực quan (Visual Feedback)**:
-  - **Điểm đầu tiên (Point 1)**: Hiển thị vòng tròn màu xanh lá cây đậm với halo phát sáng và số `1`.
-  - **Các điểm tiếp theo (Points 2, 3, ...)**: Hiển thị các chấm tròn màu cam đánh số thứ tự rõ ràng.
-  - **Đường nối ranh giới**: Đường nét liền màu cam thể hiện các cạnh đã chọn.
-  - **Xem trước màu tô (Live Fill Preview)**: Ngay khi chọn từ 3 điểm trở lên, toàn bộ miền đa giác bên trong lập tức được phủ trước màu sắc bán trong suốt của bút hiện tại.
-  - **Đường khép kín**: Đường nét đứt màu xanh lá nối từ điểm cuối về điểm số 1 kèm nhãn hướng dẫn `"✓ Chạm để tô"`.
-- **Cách hoàn tất tô màu**:
-  - Chạm lại vào **Điểm số 1** (hoặc chạm đúp vào điểm mút cuối cùng, hoặc nhấn Enter).
-  - Vùng phẳng được tự động khép kín và tạo thành một đối tượng đa giác vector phẳng bán trong suốt (độ trong suốt chuẩn ~35% không che nét chữ).
-- **Hỗ trợ thao tác phụ**:
-  - Chạm vào một điểm đã chọn trước đó để quay lui (xóa bớt điểm).
-  - Nhấn phím <kbd>Esc</kbd> hoặc đổi công cụ để hủy bỏ việc chọn điểm.
-  - Tích hợp 100% vào hệ thống **Undo / Redo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd>) và có thể xóa bằng công cụ Tẩy (Eraser).
+- **Phản hồi thị giác trực quan khi chọn đầu mút**:
+  - **Điểm đầu tiên (Point 1)**: Vòng tròn màu xanh lá cây đậm có số `1` nổi bật.
+  - **Các điểm tiếp theo (Points 2, 3...)**: Chấm tròn màu cam đánh số thứ tự nối với nhau bằng đường nét liền màu cam.
+  - **Xem trước màu tô (Live Preview)**: Ngay khi chọn từ 3 điểm trở lên, toàn bộ miền đa giác bên trong lập tức được phủ trước màu sắc bán trong suốt của màu bút đang chọn, kèm đường nét đứt xanh lá nối về điểm số 1 cùng nhãn hướng dẫn `"✓ Chạm để tô"`.
+- **Cách hoàn tất hoặc hủy**:
+  - Chạm lại vào **Điểm số 1** (hoặc chạm đúp vào điểm cuối, hoặc nhấn <kbd>Enter</kbd>) để khép kín và tạo vùng màu vector bán trong suốt chuẩn in ấn (~35% không che nét chữ).
+  - Chạm lại vào điểm 1 khi mới có 1 điểm để hủy bỏ nhanh; hoặc nhấn <kbd>Esc</kbd>.
+- **Menu lựa chọn nâng cao (nếu muốn khóa cố định một chế độ)**:
+  - `Tự động thông minh (khuyên dùng)`: Chạm vùng kín $\to$ tự động; chạm đầu mút $\to$ thủ công.
+  - `Tô vùng kín (tự động)`: Luôn chỉ dùng chế độ tô vùng kín.
+  - `Tô chọn đầu mút (thủ công)`: Luôn tạo điểm mút ở mọi vị trí chạm.
 
 ---
 
@@ -127,7 +124,7 @@ Tài liệu này tổng hợp toàn bộ các tính năng mới, các cải ti�
 3. **Cập nhật mã băm toàn vẹn SHA-256 cho NoteRenderer.exe**:
    - Khi đóng gói lại `app.asar`, mã băm header SHA-256 được tính toán và patch trực tiếp vào file thực thi `NoteRenderer.exe` tại offset `187687791`, đảm bảo ứng dụng Windows Electron khởi động ổn định 100%, không bị crash hay báo lỗi bảo mật integrity.
 4. **Cơ chế Cache-Busting cho Bản Web PWA**:
-   - Cập nhật số hiệu phiên bản Service Worker (`noterenderer-pwa-v056`) và thẻ script (`?v=580v6`) giúp thiết bị người dùng tự động làm mới bộ nhớ đệm, luôn nhận được mã nguồn mới nhất.
+   - Cập nhật số hiệu phiên bản Service Worker (`noterenderer-pwa-v057`) và thẻ script (`?v=580v7`) giúp thiết bị người dùng tự động làm mới bộ nhớ đệm, luôn nhận được mã nguồn mới nhất.
 
 ---
 
