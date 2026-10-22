@@ -15,7 +15,12 @@
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1bmlxYW5idW1jcnFjZGxjdmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5NDE4MTMsImV4cCI6MjEwNDUxNzgxM30.MWSv1QKVlQ9r-8r0hkrqWsmm75hULq_VjPCbTqXDe-o";
   const MASTER_TEACHER_KEY = "QMATH-CHOANG-2026"; // Mã truy cập nhanh cho Giáo viên / Admin
 
-  const isElectron = typeof window !== 'undefined' && window.process && window.process.type === 'renderer';
+  const isDesktopOrLocal = 
+    (typeof window !== 'undefined' && window.location.protocol === 'file:') ||
+    (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) ||
+    (typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent)) ||
+    (typeof window !== 'undefined' && window.process && window.process.type === 'renderer');
+  const isElectron = isDesktopOrLocal;
   const urlParams = new URLSearchParams(window.location.search);
 
   // State
