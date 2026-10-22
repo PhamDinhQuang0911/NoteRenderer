@@ -131,3 +131,58 @@ Tài liệu này tổng hợp toàn bộ các tính năng mới, các cải ti�
 
 *Ngày cập nhật: 22/10/2026*  
 *Được biên soạn và triển khai tự động bởi Antigravity Assistant.*
+
+
+---
+
+## 8. Sửa Lỗi Font Chữ Viết Tay Tiếng Việt (Patrick Hand Full Vietnamese Diacritics)
+
+- **Nguyên nhân lỗi cũ**:
+  - Khi gõ chữ viết tay (Text tool với font `"Patrick Hand"`), các nguyên âm tiếng Việt có dấu phụ phức tạp như `ư`, `ơ`, `ề`, `â`, `ấ`, `ẩ`, `ậ`, `ắ`, `đ`... bị rơi vào cơ chế font fallback của Windows, nhảy sang font mặc định (Arial / Segoe UI) khiến dòng chữ bị cọc cạch, nửa viết tay nửa chữ in thường.
+  - Lý do: Tệp phông `PatrickHand-*.woff2` đã có trong thư mục nhưng chưa được khai báo đầy đủ các khối `@font-face` theo dải mã ký tự `unicode-range`.
+- **Giải pháp xử lý triệt để**:
+  - Đã khai báo 3 khối `@font-face` chuẩn Google Fonts gồm 3 phân tập:
+    1. **`vietnamese`**: Bao phủ toàn bộ các ký tự dấu thanh, móc, mũ tiếng Việt (`U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9...`).
+    2. **`latin-ext`**: Mở rộng ký tự Latinh mở rộng.
+    3. **`latin`**: Ký tự chữ cái cơ bản.
+  - Đã nạp trước (pre-warm) bộ font qua `document.fonts.load('15px "Patrick Hand"', 'Aa Ạạ Ấấ Ơơ Đđ')`.
+  - **Kết quả kiểm thử**: 146/146 ký tự tiếng Việt (cả hoa và thường) hiển thị đồng nhất 100% theo đúng nét chữ viết tay mềm mại, tự nhiên.
+
+---
+
+## 9. Động Cơ Trải Hình 3D Mượt Mà Cho Khối Tròn Xoay (Hình Nón, Nón Cụt, Hình Trụ)
+
+- **Vấn đề trước đây**:
+  - Khi đang ở góc nhìn SGK (textbook perspective), bấm nút "Trải hình" làm các mặt phẳng trải ra vẫn bị nghiêng theo góc phối cảnh 3D xiên, không tạo ra được hình học phẳng trực diện như khi người dùng bấm góc nhìn "Từ trên xuống".
+- **Cải tiến chuyển động mượt mà ($0 \to 1$)**:
+  - Trong hàm giải thuật tính toán trải hình phẳng `sF` (Desktop) & `RP` (Web): Khi mức độ trải hình $n$ tăng từ $0 \to 1$, ma trận phối cảnh $w(n)$ được nội suy xoay mượt mà từ góc SGK $Ox$ ($\theta_0 \approx 72.5^\circ$) về góc nhìn phẳng trực diện $fB$ ($\theta = 0^\circ$).
+  - **Giữ cố định trọng tâm hình học (Centroid Anchor)**: Tự động bù trừ độ dời tọa độ màn hình giữa góc nhìn ban đầu và góc nhìn trực diện ($oX = b_0.x - v_0.x, oY = b_0.y - v_0.y$), giúp khối hình trải phẳng ngay tại vị trí ban đầu trên trang giấy mà không bị nhảy lệch vị trí.
+  - Kết quả khi trải hoàn toàn ($n = 1$): Hình trải ra phẳng hoàn toàn đối diện mắt người xem, các đường tròn đáy và mặt bên hình quạt/chữ nhật mở phẳng 100% chuẩn xác hệt như góc nhìn từ trên xuống!
+
+---
+
+## 10. Thanh Trượt Trải Hình Hiển Thị Trực Tiếp (Persistent Unfold Slider)
+
+- **Tiện ích thao tác**:
+  - Trước đây: Thanh trượt mức độ trải hình (`.turn-slider`) bị ẩn khi $unfold = 0$, người dùng bắt buộc phải bấm nút "Trải hình" trước thì thanh trượt mới hiện ra.
+  - Hiện tại: Ngay khi chọn khối 3D và mở thanh điều khiển xoay, **thanh trượt `Mức trải hình` hiển thị sẵn ngay cạnh nút Trải hình**.
+  - Người dùng có thể trực tiếp đặt bút / ngón tay / chuột kéo thanh trượt từ $0 \to 1$ hoặc kéo ngược lại để quan sát từng bước trải hình và gấp hình liên tục một cách trực quan, mượt mà.
+
+---
+
+## 11. Tích Hợp Hệ Thống Quản Lý Học Tập LMS `qmath.io.vn` (Phân Quyền & Lưu Đám Mây)
+
+- **Cổng bảo mật QMath LMS (`qmath-lms-auth.js`)**:
+  - Ngăn chặn truy cập tự do trái phép vào trang bảng viết `https://note.qmath.io.vn`.
+  - Tích hợp trực tiếp với hệ cơ sở dữ liệu **Supabase Auth** của dự án `qmath.io.vn`.
+  - Tự động nhận diện quyền từ URL (`?token=...`, `?key=...`), `localStorage`, hoặc tin nhắn `postMessage` từ LMS cha khi nhúng iframe.
+- **Phân quyền người dùng**:
+  - **Quyền Giáo viên (Teacher / Admin)**:
+    - Toàn quyền mở khóa bảng viết, vẽ hình học, chèn công thức, tính toán Casio.
+    - Huy hiệu: `[👨‍🏫 Giáo viên • Thầy Choang]` trên thanh tiêu đề.
+    - Nút **`☁️ Lưu QMath`**: Cho phép đặt tên và lưu bài giảng trực tiếp vào hệ thống cơ sở dữ liệu QMath LMS hoặc truyền về trang bài học cha.
+  - **Chế độ Học sinh (Student Read-only Mode)**:
+    - Kích hoạt khi có tham số `?mode=view` hoặc tài khoản học sinh.
+    - Ẩn toàn bộ công cụ sửa/vẽ/xóa; chỉ cho phép lật trang bài giảng, thu phóng, xem công thức và tương tác xoay hình 3D mà không làm thay đổi nội dung của giáo viên.
+  - **Màn hình khóa truy cập (Security Gate)**:
+    - Khi người ngoài truy cập trực tiếp: Hiển thị giao diện khóa sang trọng, kèm nút bấm dẫn đến trang đăng nhập `qmath.io.vn` và ô nhập mã giáo viên dự phòng (`QMATH-CHOANG-2026`).
