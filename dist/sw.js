@@ -1,4 +1,4 @@
-const CACHE_NAME = 'noterenderer-pwa-v054';
+const CACHE_NAME = 'noterenderer-pwa-v055';
 const PRECACHE_ASSETS = [
   './',
   './index.html',
