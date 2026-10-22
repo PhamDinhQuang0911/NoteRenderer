@@ -102,7 +102,8 @@ Tài liệu này tổng hợp toàn bộ các tính năng mới, các cải ti�
 - <kbd>I</kbd>: Vẽ hình tròn (`circle`).
 - <kbd>R</kbd>: Vẽ hình chữ nhật (`rect`). (Thước kẻ chuyển sang thanh công cụ hoặc <kbd>Shift</kbd>+<kbd>R</kbd>).
 - <kbd>M</kbd>: Bút highlight (`highlighter`).
-- Đã cập nhật nhãn tooltip tiếng Việt tương ứng trên giao diện: *"Hình tròn (I)"*, *"Hình chữ nhật (R)"*, *"Bút highlight (M)"*.
+- <kbd>O</kbd>: Bút laser (`laser`).
+- Đã cập nhật nhãn tooltip tiếng Việt tương ứng trên giao diện: *"Hình tròn (I)"*, *"Hình chữ nhật (R)"*, *"Bút highlight (M)"*, *"Bút laser (O)"*.
 
 ---
 
