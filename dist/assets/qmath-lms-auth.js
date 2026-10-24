@@ -1788,41 +1788,41 @@
     const bar = document.createElement('div');
     bar.id = 'qmath-badge-bar';
     bar.innerHTML = `
-      <div style="position:fixed;top:8px;right:76px;z-index:9999;display:flex;align-items:center;gap:6px;font-family:system-ui,-apple-system,sans-serif;font-size:12px;flex-wrap:wrap;">
+      <div style="position:fixed;bottom:3px;right:10px;z-index:9999;display:flex;align-items:center;gap:5px;font-family:system-ui,-apple-system,sans-serif;font-size:11.5px;flex-wrap:wrap;background:rgba(255,255,255,0.92);backdrop-filter:blur(6px);padding:2px 6px;border-radius:999px;border:1px solid #e2e8f0;box-shadow:0 2px 10px rgba(0,0,0,0.08);">
         ${isTeacher && !activeContext.viewMode ? `
-          <div id="qmath-save-status-pill" title="Trạng thái lưu bài giảng và sao lưu tự động" style="background:#f8fafc;color:#64748b;border:1.5px solid #e2e8f0;padding:4px 10px;border-radius:999px;font-weight:700;font-size:11.5px;display:flex;align-items:center;gap:5px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <div id="qmath-save-status-pill" title="Trạng thái lưu bài giảng và sao lưu tự động" style="background:#f8fafc;color:#64748b;border:1.5px solid #e2e8f0;padding:3px 9px;border-radius:999px;font-weight:700;font-size:11px;display:flex;align-items:center;gap:4px;">
             <span>📝</span> <span>Bảng mới</span>
           </div>
-          <button id="qmath-btn-quick-save" title="Lưu nhanh cập nhật vào bài hiện tại (Ctrl+S)" style="display:none;background:linear-gradient(135deg,#f59e0b,#ea580c);border:none;color:#fff;padding:5px 10px;border-radius:8px;font-weight:800;cursor:pointer;align-items:center;gap:4px;box-shadow:0 2px 6px rgba(234,88,12,0.3);">
+          <button id="qmath-btn-quick-save" title="Lưu nhanh cập nhật vào bài hiện tại (Ctrl+S)" style="display:none;background:linear-gradient(135deg,#f59e0b,#ea580c);border:none;color:#fff;padding:4px 9px;border-radius:999px;font-weight:800;font-size:11px;cursor:pointer;align-items:center;gap:4px;">
             <span>⚡</span> Lưu nhanh
           </button>
-          <button id="qmath-btn-backups" title="Khôi phục từ bản nháp tự động lưu trong máy" style="background:#fff;border:1.5px solid #cbd5e1;color:#334155;padding:5px 9px;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <button id="qmath-btn-backups" title="Khôi phục từ bản nháp tự động lưu trong máy" style="background:#fff;border:1px solid #cbd5e1;color:#334155;padding:3px 8px;border-radius:999px;font-weight:700;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;">
             <span>🛡️</span> Bản nháp
           </button>
         ` : ''}
 
         ${isTeacher ? `
-          <button id="qmath-btn-open-cloud" title="Mở bài giảng đã lưu từ Lớp học" style="background:#fff;border:1.5px solid #cbd5e1;color:#1e293b;padding:5px 10px;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <button id="qmath-btn-open-cloud" title="Mở bài giảng đã lưu từ Lớp học" style="background:#fff;border:1px solid #cbd5e1;color:#1e293b;padding:3px 9px;border-radius:999px;font-weight:700;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;">
             <span>📂</span> Mở bài lớp
           </button>
-          <button id="qmath-btn-save-cloud" title="Lưu bài giảng vào Lớp học theo Bài (Ctrl+S)" style="background:linear-gradient(135deg,#059669,#10b981);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(16,185,129,0.3);">
+          <button id="qmath-btn-save-cloud" title="Lưu bài giảng vào Lớp học theo Bài (Ctrl+S)" style="background:linear-gradient(135deg,#059669,#10b981);border:none;color:#fff;padding:4px 10px;border-radius:999px;font-weight:800;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;">
             <span>💾</span> Lưu vào Lớp
           </button>
-          <button id="qmath-btn-export-pdf" title="Xuất bài giảng hiện tại ra file PDF" style="background:#fff;border:1.5px solid #cbd5e1;color:#1e293b;padding:5px 10px;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <button id="qmath-btn-export-pdf" title="Xuất bài giảng hiện tại ra file PDF" style="background:#fff;border:1px solid #cbd5e1;color:#1e293b;padding:3px 9px;border-radius:999px;font-weight:700;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;">
             <span>📄</span> Xuất PDF
           </button>
         ` : `
-          <button id="qmath-btn-export-pdf" title="Tải bài giảng ra file PDF" style="background:#fff;border:1.5px solid #cbd5e1;color:#1e293b;padding:5px 10px;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <button id="qmath-btn-export-pdf" title="Tải bài giảng ra file PDF" style="background:#fff;border:1px solid #cbd5e1;color:#1e293b;padding:3px 9px;border-radius:999px;font-weight:700;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;">
             <span>📄</span> Tải PDF
           </button>
         `}
 
-        <div style="${badgeBg} color:#fff;padding:5px 10px;border-radius:999px;font-weight:700;display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+        <div style="${badgeBg} color:#fff;padding:3px 9px;border-radius:999px;font-weight:700;font-size:11px;display:flex;align-items:center;gap:4px;">
           <span>${roleTitle}</span>
           <span style="font-weight:600;">${displayName}</span>
         </div>
 
-        <button id="qmath-btn-logout" title="Đăng xuất" style="background:#fff;border:1.5px solid #e2e8f0;color:#64748b;padding:5px 8px;border-radius:8px;cursor:pointer;">
+        <button id="qmath-btn-logout" title="Đăng xuất" style="background:#fff;border:1px solid #e2e8f0;color:#64748b;padding:2px 6px;border-radius:999px;font-size:11px;cursor:pointer;">
           ✕
         </button>
       </div>
