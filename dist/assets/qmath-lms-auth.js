@@ -1822,9 +1822,14 @@
           <span style="font-weight:600;">${displayName}</span>
         </div>
 
+        <button id="qmath-btn-collapse" title="Thu gọn thanh công cụ QMath LMS" style="background:#fff;border:1px solid #e2e8f0;color:#64748b;padding:2px 6px;border-radius:999px;font-size:11px;cursor:pointer;">
+          —
+        </button>
+        ${!isDesktopOrLocal ? `
         <button id="qmath-btn-logout" title="Đăng xuất" style="background:#fff;border:1px solid #e2e8f0;color:#64748b;padding:2px 6px;border-radius:999px;font-size:11px;cursor:pointer;">
           ✕
         </button>
+        ` : ''}
       </div>
     `;
     document.body.appendChild(bar);
@@ -1848,12 +1853,37 @@
     const btnPdf = document.getElementById('qmath-btn-export-pdf');
     if (btnPdf) btnPdf.onclick = exportCurrentNoteToPdf;
 
-    document.getElementById('qmath-btn-logout').onclick = () => {
-      if (confirm('Bạn có chắc chắn muốn đăng xuất tài khoản QMath khỏi Bảng vẽ?')) {
-        clearSession();
-        window.location.reload();
-      }
-    };
+    const btnCollapse = document.getElementById('qmath-btn-collapse');
+    if (btnCollapse) {
+      btnCollapse.onclick = () => {
+        bar.style.display = 'none';
+        let mini = document.getElementById('qmath-mini-restore');
+        if (!mini) {
+          mini = document.createElement('button');
+          mini.id = 'qmath-mini-restore';
+          mini.title = 'Mở thanh công cụ QMath LMS (Lưu bài giảng / Bản nháp)';
+          mini.style.cssText = 'position:fixed;bottom:4px;right:10px;z-index:9999;background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;border:none;padding:4px 10px;border-radius:999px;font-family:system-ui,sans-serif;font-size:11px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(37,99,235,0.3);';
+          mini.textContent = '📐 QMath LMS';
+          mini.onclick = () => {
+            mini.style.display = 'none';
+            bar.style.display = 'block';
+          };
+          document.body.appendChild(mini);
+        } else {
+          mini.style.display = 'block';
+        }
+      };
+    }
+
+    const btnLogout = document.getElementById('qmath-btn-logout');
+    if (btnLogout) {
+      btnLogout.onclick = () => {
+        if (confirm('Bạn có chắc chắn muốn đăng xuất tài khoản QMath khỏi Bảng vẽ?')) {
+          clearSession();
+          window.location.reload();
+        }
+      };
+    }
 
     updateSaveStatusBadge();
   }
