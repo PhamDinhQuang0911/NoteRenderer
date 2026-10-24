@@ -1,12 +1,16 @@
 /**
- * QMATH LMS Integration, Access Control & Vector Lesson Note Engine
+ * QMATH LMS Integration, Access Control, Auto-Backup & Vector Lesson Note Engine
  * Tích hợp Bảng viết NoteRenderer (note.qmath.io.vn) vào hệ sinh thái QMath LMS (qmath.io.vn)
  * - Xác thực bảo mật qua tài khoản Giáo viên/Admin trên Supabase & postMessage có kiểm tra Origin
  * - Lưu bài giảng theo Lớp học / Bài học tối ưu dung lượng R2:
- *   + KHÔNG lưu file PDF trên R2
- *   + Tách ảnh đính kèm sang WebP theo mã băm SHA-256 (chống trùng lặp 100%)
- *   + Chỉ lưu dữ liệu nét vẽ vector .nrn (gzip JSON siêu nhẹ) + ảnh bìa cover.webp
- * - Chế độ Học sinh xem lại bài giảng trực tiếp & Xuất PDF theo yêu cầu ngay tại trình duyệt
+ *   + KHÔNG lưu file PDF nặng trên R2
+ *   + Tách ảnh đính kèm sang WebP theo mã băm SHA-256 (chống trùng lặp 100% + bộ nhớ đệm RAM tức thì ở các lần lưu sau)
+ *   + Chỉ lưu dữ liệu nét vẽ vector .nrn (gzip JSON siêu nhẹ ~15-40KB) + ảnh bìa cover.webp
+ * - Hệ thống An toàn 4 lớp chống mất bài:
+ *   1. Huy hiệu Trạng thái Đã lưu / Chưa lưu trực tiếp trên thanh công cụ + Nút Lưu nhanh (Ctrl+S) + Thông báo nổi (Toast)
+ *   2. Cảnh báo xác nhận khi tắt tab / đóng trình duyệt nếu có nét viết mới chưa lưu lên Lớp học (beforeunload)
+ *   3. Tự động Sao lưu ngầm vào ổ cứng máy tính (IndexedDB Auto-Backup mỗi 5 giây) chống mất điện / sập nguồn
+ *   4. Tự động phát hiện & khôi phục bài viết dở khi mở lại máy + Hộp thoại Quản lý Bản nháp tự lưu
  */
 (function () {
   'use strict';
@@ -46,8 +50,19 @@
   };
   let currentLoadedLesson = null;
 
+  // Save & Auto-Backup State
+  const sessionAssetCache = new Map(); // Cache qRef theo fingerprint của ảnh dataUrl trong suốt phiên dạy
+  let initialDocSignature = null;
+  let lastCloudSavedSignature = null;
+  let lastCloudSavedAt = null;
+  let lastLocalBackupSignature = null;
+  let lastLocalBackupAt = null;
+  let hasUnsavedCloudChanges = false;
+  let isSavingToCloud = false;
+  let watchIntervalId = null;
+
   // =========================================================
-  // 1. SUPABASE REST HELPERS
+  // 1. SUPABASE REST HELPERS & CROSS-TAB SYNC
   // =========================================================
   function sbHeaders(extra = {}) {
     return {
@@ -81,8 +96,515 @@
     return await res.json();
   }
 
+  function notifyLmsLessonSaved(lessonPayload) {
+    try {
+      const targetWin = window.opener || (window.parent !== window ? window.parent : null);
+      if (targetWin) {
+        targetWin.postMessage({
+          type: 'QMATH_LESSON_NOTE_SAVED',
+          lesson: lessonPayload
+        }, '*');
+      }
+    } catch (e) {}
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('qmath_lesson_sync');
+        bc.postMessage({ type: 'QMATH_LESSON_NOTE_SAVED', lesson: lessonPayload, at: Date.now() });
+        setTimeout(() => bc.close(), 500);
+      }
+    } catch (e) {}
+  }
+
   // =========================================================
-  // 2. SESSION & AUTHENTICATION
+  // 2. TOAST NOTIFICATION & SAVE STATUS UI
+  // =========================================================
+  function showToast(message, type = 'success', durationMs = 4500) {
+    let container = document.getElementById('qmath-toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'qmath-toast-container';
+      container.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999999;display:flex;flex-direction:column;gap:10px;max-width:420px;font-family:system-ui,-apple-system,sans-serif;pointer-events:none;';
+      document.body.appendChild(container);
+    }
+
+    const bgMap = {
+      success: 'linear-gradient(135deg,#059669,#10b981)',
+      warning: 'linear-gradient(135deg,#d97706,#f59e0b)',
+      info: 'linear-gradient(135deg,#1d4ed8,#3b82f6)',
+      error: 'linear-gradient(135deg,#dc2626,#ef4444)'
+    };
+
+    const toast = document.createElement('div');
+    toast.style.cssText = `background:${bgMap[type] || bgMap.info};color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 12px 28px rgba(0,0,0,0.25);font-size:13px;font-weight:700;line-height:1.45;pointer-events:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;transition:all 0.25s ease;`;
+    toast.innerHTML = `
+      <span>${message}</span>
+      <button style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:24px;height:24px;border-radius:6px;cursor:pointer;font-weight:800;flex-shrink:0;">✕</button>
+    `;
+    toast.querySelector('button').onclick = () => toast.remove();
+    container.appendChild(toast);
+
+    if (durationMs > 0) {
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        setTimeout(() => toast.remove(), 260);
+      }, durationMs);
+    }
+  }
+
+  function formatTimeShort(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function updateSaveStatusBadge() {
+    const pill = document.getElementById('qmath-save-status-pill');
+    const quickBtn = document.getElementById('qmath-btn-quick-save');
+    if (!pill) return;
+
+    if (quickBtn) {
+      if (currentLoadedLesson && currentLoadedLesson.id && currentLoadedLesson.classId) {
+        quickBtn.style.display = 'flex';
+        quickBtn.title = `Lưu nhanh cập nhật vào "${currentLoadedLesson.title}" (Phím tắt: Ctrl + S)`;
+      } else {
+        quickBtn.style.display = 'none';
+      }
+    }
+
+    if (isSavingToCloud) {
+      pill.style.background = '#eff6ff';
+      pill.style.color = '#1d4ed8';
+      pill.style.borderColor = '#93c5fd';
+      pill.innerHTML = `<span>⏳</span> <span>Đang lưu lên lớp...</span>`;
+      return;
+    }
+
+    if (hasUnsavedCloudChanges) {
+      const backupNote = lastLocalBackupAt ? ` • Đã tự lưu máy ${formatTimeShort(lastLocalBackupAt)}` : '';
+      pill.style.background = '#fffbeb';
+      pill.style.color = '#b45309';
+      pill.style.borderColor = '#fcd34d';
+      pill.innerHTML = `<span style="color:#f59e0b;">●</span> <span>Chưa lưu lên lớp${backupNote}</span>`;
+    } else if (lastCloudSavedAt) {
+      const ver = currentLoadedLesson?.version ? ` v${currentLoadedLesson.version}` : '';
+      pill.style.background = '#ecfdf5';
+      pill.style.color = '#047857';
+      pill.style.borderColor = '#6ee7b7';
+      pill.innerHTML = `<span>✅</span> <span>Đã lưu vào lớp${ver} (${formatTimeShort(lastCloudSavedAt)})</span>`;
+    } else if (lastLocalBackupAt) {
+      pill.style.background = '#f8fafc';
+      pill.style.color = '#334155';
+      pill.style.borderColor = '#cbd5e1';
+      pill.innerHTML = `<span>🛡️</span> <span>Đã tự lưu máy (${formatTimeShort(lastLocalBackupAt)})</span>`;
+    } else {
+      pill.style.background = '#f8fafc';
+      pill.style.color = '#64748b';
+      pill.style.borderColor = '#e2e8f0';
+      pill.innerHTML = `<span>📝</span> <span>Bảng mới</span>`;
+    }
+  }
+
+  // =========================================================
+  // 3. INDEXEDDB AUTO-BACKUP ENGINE (CHỐNG MẤT ĐIỆN / TẮT TAB)
+  // =========================================================
+  const IDB_NAME = 'QMathNoteAutoBackupDB';
+  const IDB_STORE = 'backups';
+
+  function openBackupDb() {
+    return new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') return reject(new Error('IndexedDB not supported'));
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbPutBackup(record) {
+    const db = await openBackupDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(record);
+      tx.oncomplete = () => { db.close(); resolve(true); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  }
+
+  async function idbGetAllBackups() {
+    const db = await openBackupDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).getAll();
+      req.onsuccess = () => { db.close(); resolve(req.result || []); };
+      req.onerror = () => { db.close(); reject(req.error); };
+    });
+  }
+
+  async function idbDeleteBackup(id) {
+    const db = await openBackupDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(id);
+      tx.oncomplete = () => { db.close(); resolve(true); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  }
+
+  function computeDocSignature(doc) {
+    if (!doc || !Array.isArray(doc.pages)) {
+      return { sig: 'empty', pageCount: 0, strokeCount: 0, itemCount: 0, hasContent: false };
+    }
+    const parts = [`P:${doc.pages.length}`];
+    let totalStrokes = 0;
+    let totalItems = 0;
+    for (let i = 0; i < doc.pages.length; i++) {
+      const p = doc.pages[i];
+      const sLen = Array.isArray(p.strokes) ? p.strokes.length : 0;
+      const iLen = Array.isArray(p.items) ? p.items.length : 0;
+      const gShapes = (p.geo && Array.isArray(p.geo.shapes)) ? p.geo.shapes.length : 0;
+      const gPts = (p.geo && p.geo.points) ? Object.keys(p.geo.points).length : 0;
+      totalStrokes += sLen;
+      totalItems += iLen + gShapes;
+      const lastS = sLen > 0 ? p.strokes[sLen - 1] : null;
+      const lastSKey = lastS ? (lastS.id || (Array.isArray(lastS.pts) ? lastS.pts.length : '')) : '';
+      const lastI = iLen > 0 ? p.items[iLen - 1] : null;
+      const lastIKey = lastI ? `${lastI.id || ''}_${Math.round(lastI.x || 0)}_${Math.round(lastI.y || 0)}` : '';
+      parts.push(`${i}:${sLen}:${lastSKey}:${iLen}:${lastIKey}:${gShapes}:${gPts}`);
+    }
+    return {
+      sig: parts.join('|'),
+      pageCount: doc.pages.length,
+      strokeCount: totalStrokes,
+      itemCount: totalItems,
+      hasContent: totalStrokes > 0 || totalItems > 0 || doc.pages.length > 1
+    };
+  }
+
+  async function performLocalAutoBackup() {
+    if (activeContext.viewMode || userRole !== 'teacher') return;
+    if (!window.__NR_EDITOR || !window.__NR_EDITOR.doc || !window.__NR_API) return;
+
+    const info = computeDocSignature(window.__NR_EDITOR.doc);
+    if (!info.hasContent) return;
+    if (info.sig === lastLocalBackupSignature) return;
+
+    try {
+      const nrnBytes = await window.__NR_API.encode(window.__NR_EDITOR.doc);
+      const now = Date.now();
+      const sessionKey = activeContext.lessonId
+        ? `lesson_${activeContext.lessonId}`
+        : (activeContext.classId ? `class_${activeContext.classId}` : 'latest_session');
+
+      const record = {
+        id: sessionKey,
+        title: currentLoadedLesson?.title || document.title || `Bản nháp ngày ${new Date().toLocaleDateString('vi-VN')}`,
+        classId: activeContext.classId || currentLoadedLesson?.classId || '',
+        className: currentLoadedLesson?.className || '',
+        lessonId: activeContext.lessonId || currentLoadedLesson?.id || '',
+        chapter: currentLoadedLesson?.chapter || '',
+        pageCount: info.pageCount,
+        strokeCount: info.strokeCount,
+        itemCount: info.itemCount,
+        sig: info.sig,
+        unsavedToCloud: info.sig !== lastCloudSavedSignature,
+        updatedAt: now,
+        nrnBytes
+      };
+
+      await idbPutBackup(record);
+      // Cũng lưu 1 bản lịch sử theo mốc 5 phút để phòng trường hợp cần quay lại bản cũ
+      const slotId = `slot_${Math.floor(now / (5 * 60 * 1000)) % 8}`;
+      await idbPutBackup({ ...record, id: slotId });
+
+      lastLocalBackupSignature = info.sig;
+      lastLocalBackupAt = now;
+      updateSaveStatusBadge();
+    } catch (e) {
+      console.warn('[AutoBackup] Lỗi lưu nháp tự động:', e);
+    }
+  }
+
+  function startChangeWatcherAndAutoBackup() {
+    if (watchIntervalId) clearInterval(watchIntervalId);
+
+    // Khởi tạo chữ ký ban đầu khi bảng vẽ sẵn sàng
+    setTimeout(() => {
+      if (window.__NR_EDITOR && window.__NR_EDITOR.doc) {
+        const initInfo = computeDocSignature(window.__NR_EDITOR.doc);
+        if (!initialDocSignature) initialDocSignature = initInfo.sig;
+        if (!lastCloudSavedSignature && !initInfo.hasContent) {
+          lastCloudSavedSignature = initInfo.sig;
+        }
+      }
+    }, 1000);
+
+    let tick = 0;
+    watchIntervalId = setInterval(async () => {
+      if (activeContext.viewMode || userRole !== 'teacher') return;
+      if (!window.__NR_EDITOR || !window.__NR_EDITOR.doc) return;
+
+      const info = computeDocSignature(window.__NR_EDITOR.doc);
+      if (!initialDocSignature) initialDocSignature = info.sig;
+
+      const isModified = info.hasContent && (info.sig !== lastCloudSavedSignature);
+      if (isModified !== hasUnsavedCloudChanges) {
+        hasUnsavedCloudChanges = isModified;
+        updateSaveStatusBadge();
+      }
+
+      tick++;
+      // Cứ 3 nhịp (4.5 giây) tự động backup vào ổ cứng IndexedDB nếu có thay đổi
+      if (tick % 3 === 0 && info.hasContent && info.sig !== lastLocalBackupSignature) {
+        await performLocalAutoBackup();
+      }
+    }, 1500);
+
+    // Cảnh báo trước khi đóng tab / tắt trình duyệt nếu có thay đổi chưa lưu lên Lớp học
+    window.addEventListener('beforeunload', (e) => {
+      if (activeContext.viewMode || userRole !== 'teacher') return;
+      if (window.__NR_EDITOR && window.__NR_EDITOR.doc) {
+        const info = computeDocSignature(window.__NR_EDITOR.doc);
+        if (info.hasContent && info.sig !== lastCloudSavedSignature) {
+          performLocalAutoBackup();
+          const msg = 'Bài giảng có nội dung mới chưa được lưu vào Lớp học. Bạn có chắc chắn muốn rời trang?';
+          e.preventDefault();
+          e.returnValue = msg;
+          return msg;
+        }
+      }
+    });
+
+    // Phím tắt Ctrl + S để Lưu nhanh lên Lớp học
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        if (userRole === 'teacher' && !activeContext.viewMode) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (currentLoadedLesson && currentLoadedLesson.id && currentLoadedLesson.classId) {
+            quickSaveCurrentLessonToCloud();
+          } else {
+            openSaveToClassModal();
+          }
+        }
+      }
+    }, true);
+  }
+
+  async function checkAndOfferAutoRecovery() {
+    if (activeContext.viewMode || userRole !== 'teacher') return;
+    try {
+      const backups = await idbGetAllBackups();
+      if (!backups || backups.length === 0) return;
+
+      // Tìm bản backup chưa lưu lên đám mây gần nhất (trong vòng 48 giờ qua)
+      const candidates = backups
+        .filter(b => b && b.nrnBytes && b.unsavedToCloud && (Date.now() - (b.updatedAt || 0) < 48 * 3600 * 1000))
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+      if (candidates.length === 0) return;
+      const latest = candidates[0];
+
+      // Nếu đang mở đúng lessonId đó mà bản trên cloud đã mới hơn thì bỏ qua
+      if (currentLoadedLesson && currentLoadedLesson.updatedAt) {
+        const cloudTime = new Date(currentLoadedLesson.updatedAt).getTime();
+        if (cloudTime >= latest.updatedAt) return;
+      }
+
+      showAutoRecoveryBanner(latest);
+    } catch (e) {
+      console.warn('[AutoRecovery] Check error:', e);
+    }
+  }
+
+  function showAutoRecoveryBanner(backupRecord) {
+    let existing = document.getElementById('qmath-recovery-banner');
+    if (existing) existing.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'qmath-recovery-banner';
+    banner.style.cssText = 'position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:99998;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;padding:12px 18px;border-radius:16px;border:2px solid #f59e0b;box-shadow:0 20px 40px rgba(0,0,0,0.4);display:flex;align-items:center;gap:14px;font-family:system-ui,-apple-system,sans-serif;font-size:12.5px;max-width:92vw;flex-wrap:wrap;';
+    const timeStr = new Date(backupRecord.updatedAt).toLocaleString('vi-VN', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit'
+    });
+
+    banner.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:22px;">🛡️</span>
+        <div>
+          <div style="font-weight:800;color:#fbbf24;font-size:13px;">Phát hiện bài giảng tự động sao lưu chưa lưu lên Lớp!</div>
+          <div style="color:#e2e8f0;font-size:12px;margin-top:2px;">
+            <b>${backupRecord.title || 'Bản nháp'}</b> • Lúc ${timeStr} (${backupRecord.pageCount || 1} trang, ${backupRecord.strokeCount || 0} nét bút)
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="qm-rec-restore" style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border:none;padding:7px 14px;border-radius:10px;font-weight:800;font-size:12px;cursor:pointer;">
+          🔄 Khôi phục ngay
+        </button>
+        <button id="qm-rec-download" style="background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.25);padding:7px 12px;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;">
+          💾 Tải file .nrn
+        </button>
+        <button id="qm-rec-dismiss" style="background:transparent;color:#94a3b8;border:none;padding:6px 10px;font-weight:700;font-size:12px;cursor:pointer;">
+          Đóng
+        </button>
+      </div>
+    `;
+    document.body.appendChild(banner);
+
+    document.getElementById('qm-rec-restore').onclick = async () => {
+      try {
+        await restoreFromBackupRecord(backupRecord);
+        banner.remove();
+        showToast('✅ Đã khôi phục bài giảng từ bản sao lưu tự động! Hãy bấm "Lưu vào Lớp" để đồng bộ.', 'success', 5000);
+      } catch (err) {
+        alert('Lỗi khôi phục bản nháp: ' + err.message);
+      }
+    };
+
+    document.getElementById('qm-rec-download').onclick = () => {
+      downloadBackupNrnFile(backupRecord);
+    };
+
+    document.getElementById('qm-rec-dismiss').onclick = async () => {
+      banner.remove();
+      try {
+        backupRecord.unsavedToCloud = false;
+        await idbPutBackup(backupRecord);
+      } catch (e) {}
+    };
+  }
+
+  async function restoreFromBackupRecord(record) {
+    await waitForNoteRendererReady();
+    const bytes = record.nrnBytes instanceof Uint8Array
+      ? record.nrnBytes
+      : new Uint8Array(record.nrnBytes);
+    const decodedDoc = await window.__NR_API.decode(bytes);
+    await hydrateDocAssetsFromR2(decodedDoc);
+
+    const docTitle = record.title || 'Bản khôi phục';
+    if (typeof window.__NR_OPEN_DOC === 'function') {
+      window.__NR_OPEN_DOC({ doc: decodedDoc, name: docTitle, ref: null });
+    } else if (window.__NR_EDITOR && typeof window.__NR_EDITOR.load === 'function') {
+      window.__NR_EDITOR.load(decodedDoc);
+    }
+
+    if (record.classId) activeContext.classId = record.classId;
+    if (record.lessonId) activeContext.lessonId = record.lessonId;
+    hasUnsavedCloudChanges = true;
+    updateSaveStatusBadge();
+  }
+
+  function downloadBackupNrnFile(record) {
+    const bytes = record.nrnBytes instanceof Uint8Array
+      ? record.nrnBytes
+      : new Uint8Array(record.nrnBytes);
+    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeName = (record.title || 'Ban_sao_luu_QMath').replace(/[\\/:*?"<>|]/g, '_');
+    a.href = url;
+    a.download = `${safeName}.nrn`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 2000);
+  }
+
+  async function openAutoBackupsModal() {
+    let existing = document.getElementById('qmath-backups-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'qmath-backups-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,sans-serif;';
+    modal.innerHTML = `
+      <div style="background:#fff;max-width:620px;width:100%;border-radius:20px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:16px 22px;color:#fff;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <h3 style="margin:0;font-size:16px;font-weight:800;">🛡️ Bản Nháp Tự Động Sao Lưu Trong Máy</h3>
+            <p style="margin:3px 0 0;font-size:11.5px;color:#94a3b8;">Hệ thống tự động lưu vào ổ cứng mỗi 5 giây khi viết bài (An toàn ngay cả khi mất điện)</p>
+          </div>
+          <button id="qm-bk-close" style="background:rgba(255,255,255,0.15);border:none;color:#fff;width:30px;height:30px;border-radius:8px;cursor:pointer;">✕</button>
+        </div>
+        <div id="qm-bk-list" style="padding:18px 22px;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;">
+          <div style="text-align:center;padding:30px;color:#64748b;font-size:13px;">Đang đọc dữ liệu sao lưu trên máy...</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById('qm-bk-close').onclick = () => modal.remove();
+
+    try {
+      const backups = (await idbGetAllBackups())
+        .filter(b => b && b.nrnBytes)
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+      const listEl = document.getElementById('qm-bk-list');
+      if (backups.length === 0) {
+        listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#94a3b8;font-size:13px;">Chưa có bản sao lưu tự động nào trên trình duyệt này.</div>';
+        return;
+      }
+
+      listEl.innerHTML = backups.map((b, idx) => {
+        const tStr = new Date(b.updatedAt).toLocaleString('vi-VN');
+        const statusTag = b.unsavedToCloud
+          ? `<span style="background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;">⚠️ Chưa lưu lên lớp</span>`
+          : `<span style="background:#d1fae5;color:#047857;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;">✅ Đã đồng bộ</span>`;
+        return `
+          <div style="padding:12px 14px;border:1.5px solid #e2e8f0;border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f8fafc;">
+            <div style="min-width:0;flex:1;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-size:13.5px;font-weight:800;color:#0f172a;">${b.title || 'Bản sao lưu'}</span>
+                ${statusTag}
+              </div>
+              <div style="font-size:11.5px;color:#64748b;margin-top:4px;">
+                🕒 ${tStr} • 📄 ${b.pageCount || 1} trang • ✍️ ${b.strokeCount || 0} nét bút
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button data-restore-idx="${idx}" style="padding:7px 12px;border-radius:8px;border:none;background:#2563eb;color:#fff;font-weight:800;font-size:12px;cursor:pointer;">
+                Khôi phục
+              </button>
+              <button data-dl-idx="${idx}" style="padding:7px 10px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#334155;font-weight:700;font-size:12px;cursor:pointer;" title="Tải file .nrn về máy">
+                💾 .nrn
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      listEl.querySelectorAll('[data-restore-idx]').forEach(btn => {
+        btn.onclick = async () => {
+          const item = backups[Number(btn.getAttribute('data-restore-idx'))];
+          if (!item) return;
+          modal.remove();
+          await restoreFromBackupRecord(item);
+          showToast('✅ Đã khôi phục bản nháp thành công!', 'success');
+        };
+      });
+
+      listEl.querySelectorAll('[data-dl-idx]').forEach(btn => {
+        btn.onclick = () => {
+          const item = backups[Number(btn.getAttribute('data-dl-idx'))];
+          if (item) downloadBackupNrnFile(item);
+        };
+      });
+    } catch (e) {
+      alert('Lỗi đọc bản sao lưu: ' + e.message);
+    }
+  }
+
+  // =========================================================
+  // 4. SESSION & AUTHENTICATION
   // =========================================================
   function getStoredSession() {
     try {
@@ -118,7 +640,6 @@
     const cleanUid = String(uid || '').trim();
     const adminEmails = ['phamdinhquang0911@gmail.com', 'phamngockhanh.942001@gmail.com', 'phamngockhanh.942002@gmail.com', 'admin@gmail.com'];
 
-    // 1. Check users table
     try {
       const conds = [];
       if (cleanUid) conds.push(`id.eq.${encodeURIComponent(cleanUid)}`);
@@ -146,7 +667,6 @@
       if (err.message === 'Mật khẩu không chính xác!') throw err;
     }
 
-    // 2. Check configurations -> admin_roles
     try {
       const confRows = await sbSelect('configurations', `select=raw_data&id=eq.admin_roles&limit=1`);
       if (Array.isArray(confRows) && confRows[0]?.raw_data?.accounts) {
@@ -170,7 +690,6 @@
       if (err.message === 'Mật khẩu không chính xác!') throw err;
     }
 
-    // 3. Super Admin fallback (when verified from LMS with matching UID/Email)
     if (cleanEmail && adminEmails.includes(cleanEmail) && password === null) {
       return {
         uid: cleanUid || 'toPSzoUgYqduYdZrzj8QjARQoOW2',
@@ -184,7 +703,6 @@
   }
 
   async function authenticate() {
-    // 1. Якщо đang mở chế độ Xem Bài Giảng (?view=<lessonId> hoặc ?mode=view)
     if (activeContext.viewMode && (activeContext.lessonId || activeContext.r2Key)) {
       const stored = getStoredSession();
       if (stored && stored.user && stored.role === 'teacher') {
@@ -203,18 +721,19 @@
       return true;
     }
 
-    // 2. Desktop / Localhost
     if (isDesktopOrLocal) {
       currentUser = { uid: 'toPSzoUgYqduYdZrzj8QjARQoOW2', email: 'phamngockhanh.942002@gmail.com', name: 'Thầy Choang' };
       userRole = 'teacher';
       initUI();
+      startChangeWatcherAndAutoBackup();
       if (activeContext.lessonId || activeContext.r2Key) {
         await loadAndRenderLessonNote(activeContext.lessonId, activeContext.r2Key);
+      } else {
+        await checkAndOfferAutoRecovery();
       }
       return true;
     }
 
-    // 3. Kiểm tra thông tin truyền từ LMS (kèm xác minh tài khoản thực trên Supabase)
     const paramUid = urlParams.get('uid');
     const paramEmail = urlParams.get('email');
     const paramName = urlParams.get('name');
@@ -228,8 +747,11 @@
           saveSession(verified, 'teacher');
           cleanSensitiveUrlParams();
           initUI();
+          startChangeWatcherAndAutoBackup();
           if (activeContext.lessonId || activeContext.r2Key) {
             await loadAndRenderLessonNote(activeContext.lessonId, activeContext.r2Key);
+          } else {
+            await checkAndOfferAutoRecovery();
           }
           return true;
         }
@@ -238,21 +760,22 @@
       }
     }
 
-    // 4. Kiểm tra phiên đã lưu trong LocalStorage (hạn 14 ngày)
     const stored = getStoredSession();
     if (stored && stored.user && stored.role === 'teacher') {
       if (Date.now() - (stored.timestamp || 0) < 14 * 86400 * 1000) {
         currentUser = stored.user;
         userRole = 'teacher';
         initUI();
+        startChangeWatcherAndAutoBackup();
         if (activeContext.lessonId || activeContext.r2Key) {
           await loadAndRenderLessonNote(activeContext.lessonId, activeContext.r2Key);
+        } else {
+          await checkAndOfferAutoRecovery();
         }
         return true;
       }
     }
 
-    // 5. Nếu mở từ cửa sổ LMS (window.opener hoặc window.parent), gửi tín hiệu QMATH_READY để nhận phiên
     if (window.opener || (window.parent && window.parent !== window)) {
       try {
         const targetWin = window.opener || window.parent;
@@ -277,7 +800,6 @@
     } catch (e) {}
   }
 
-  // Lắng nghe postMessage có kiểm tra Origin chặt chẽ
   window.addEventListener('message', async (e) => {
     if (!e.data || typeof e.data !== 'object') return;
     if (e.origin && !ALLOWED_LMS_ORIGINS.includes(e.origin) && !e.origin.endsWith('.qmath.io.vn')) {
@@ -291,6 +813,7 @@
         if (e.data.classId) activeContext.classId = e.data.classId;
         if (e.data.lessonId) activeContext.lessonId = e.data.lessonId;
         initUI();
+        startChangeWatcherAndAutoBackup();
         if (e.data.lessonId) {
           await loadAndRenderLessonNote(e.data.lessonId, e.data.r2Key || '');
         }
@@ -299,7 +822,7 @@
   });
 
   // =========================================================
-  // 3. LOCK OVERLAY (LOGIN WITH QMATH TEACHER ACCOUNT)
+  // 5. LOCK OVERLAY (LOGIN WITH QMATH TEACHER ACCOUNT)
   // =========================================================
   function showLockOverlay() {
     let overlay = document.getElementById('qmath-lock-overlay');
@@ -363,6 +886,7 @@
         saveSession(verified, 'teacher');
         overlay.remove();
         initUI();
+        startChangeWatcherAndAutoBackup();
       } catch (err) {
         errBox.textContent = err.message || 'Lỗi xác thực tài khoản!';
         errBox.style.display = 'block';
@@ -379,7 +903,7 @@
   }
 
   // =========================================================
-  // 4. R2 DEDUPLICATED VECTOR NOTE ENGINE (.NRN + SHA-256 WEBP)
+  // 6. R2 DEDUPLICATED VECTOR NOTE ENGINE (.NRN + SHA-256 WEBP)
   // =========================================================
   async function sha256HexFromBuffer(arrayBuffer) {
     const hashBuf = await crypto.subtle.digest('SHA-256', arrayBuffer);
@@ -391,7 +915,13 @@
     return hex;
   }
 
-  async function compressDataUrlToWebpBlob(dataUrl, maxDim = 1920, quality = 0.85) {
+  function fastDataUrlKey(dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string') return '';
+    const len = dataUrl.length;
+    return `${len}:${dataUrl.slice(0, 80)}:${dataUrl.slice(Math.floor(len / 2), Math.floor(len / 2) + 80)}:${dataUrl.slice(-80)}`;
+  }
+
+  async function compressDataUrlToWebpBlob(dataUrl, maxDim = 2000, quality = 0.86) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
@@ -448,10 +978,8 @@
   async function extractAndDeduplicateDocAssets(docObj, teacherId, onProgress) {
     const cloned = JSON.parse(JSON.stringify(docObj));
     const assetsManifest = [];
-    const seenDataUrls = new Map();
     const cleanTeacher = String(teacherId || 'teacher').replace(/[^a-zA-Z0-9_-]/g, '_');
 
-    // Collect all data:image items across pages
     const imageTargets = [];
     if (cloned.paperImage && typeof cloned.paperImage === 'string' && cloned.paperImage.startsWith('data:image/')) {
       imageTargets.push({ holder: cloned, key: 'paperImage' });
@@ -460,8 +988,14 @@
       for (const p of cloned.pages) {
         if (!Array.isArray(p.items)) continue;
         for (const item of p.items) {
-          if (item && item.type === 'image' && typeof item.src === 'string' && item.src.startsWith('data:image/')) {
-            imageTargets.push({ holder: item, key: 'src' });
+          if (item && item.type === 'image' && typeof item.src === 'string') {
+            if (item.src.startsWith('data:image/')) {
+              imageTargets.push({ holder: item, key: 'src' });
+            } else if (item.src.startsWith('qasset:')) {
+              const ak = item.src.slice('qasset:'.length);
+              if (!assetsManifest.includes(ak)) assetsManifest.push(ak);
+              if (item.pdf) delete item.pdf;
+            }
           }
         }
       }
@@ -470,27 +1004,39 @@
     for (let i = 0; i < imageTargets.length; i++) {
       const target = imageTargets[i];
       const rawDataUrl = target.holder[target.key];
-      if (onProgress) onProgress(`Đang tối ưu ảnh đính kèm (${i + 1}/${imageTargets.length})...`);
+      const memKey = fastDataUrlKey(rawDataUrl);
 
-      if (seenDataUrls.has(rawDataUrl)) {
-        target.holder[target.key] = seenDataUrls.get(rawDataUrl);
+      // Nếu ảnh trang đề này đã được nén trong phiên làm việc hiện tại -> lấy ngay lập tức (0ms!)
+      if (sessionAssetCache.has(memKey)) {
+        const cached = sessionAssetCache.get(memKey);
+        target.holder[target.key] = cached.qRef;
+        if (target.holder.pdf) delete target.holder.pdf;
+        if (!assetsManifest.includes(cached.assetKey)) assetsManifest.push(cached.assetKey);
         continue;
       }
 
+      if (onProgress) onProgress(`Đang tách & nén trang đề/ảnh đính kèm lần đầu (${i + 1}/${imageTargets.length})...`);
+
       try {
-        const webpBlob = await compressDataUrlToWebpBlob(rawDataUrl, 1920, 0.85);
+        const webpBlob = await compressDataUrlToWebpBlob(rawDataUrl, 2000, 0.86);
         const buf = await webpBlob.arrayBuffer();
         const sha = await sha256HexFromBuffer(buf);
         const assetKey = `note-assets/${cleanTeacher}/${sha}.webp`;
         await uploadBlobToR2(assetKey, webpBlob, true);
 
         const qRef = `qasset:${assetKey}`;
-        seenDataUrls.set(rawDataUrl, qRef);
+        sessionAssetCache.set(memKey, { qRef, assetKey });
         target.holder[target.key] = qRef;
+        if (target.holder.pdf) delete target.holder.pdf;
         if (!assetsManifest.includes(assetKey)) assetsManifest.push(assetKey);
       } catch (e) {
         console.warn('[NoteRenderer R2] Giữ nguyên ảnh gốc do lỗi nén:', e);
       }
+    }
+
+    // Loại bỏ khối nhị phân PDF gốc thừa để tệp .nrn chỉ còn đúng dữ liệu vector siêu nhẹ (~15-40KB)
+    if (cloned.pdfs) {
+      delete cloned.pdfs;
     }
 
     return { cleanDoc: cloned, assetsManifest };
@@ -531,6 +1077,8 @@
           reader.readAsDataURL(blob);
         });
         resolvedMap.set(qRef, dataUrl);
+        // Ghi sẵn vào cache RAM để nếu giáo viên mở lại bài giảng và lưu tiếp thì không phải nén lại
+        sessionAssetCache.set(fastDataUrlKey(dataUrl), { qRef, assetKey });
       } catch (e) {
         console.warn('[NoteRenderer R2] Fallback direct URL for asset:', assetKey, e);
         resolvedMap.set(qRef, url);
@@ -554,7 +1102,7 @@
   }
 
   // =========================================================
-  // 5. LOAD & RENDER LESSON NOTE (FOR STUDENT & TEACHER)
+  // 7. LOAD & RENDER LESSON NOTE (FOR STUDENT & TEACHER)
   // =========================================================
   async function waitForNoteRendererReady(timeoutMs = 10000) {
     const start = Date.now();
@@ -632,7 +1180,16 @@
 
       document.title = `${docTitle} - QMath Note`;
 
-      // Якщо là chế độ Xem bài giảng (Học sinh hoặc ?view=...)
+      setTimeout(() => {
+        if (window.__NR_EDITOR && window.__NR_EDITOR.doc) {
+          const sigInfo = computeDocSignature(window.__NR_EDITOR.doc);
+          lastCloudSavedSignature = sigInfo.sig;
+          lastCloudSavedAt = lessonData?.updatedAt ? new Date(lessonData.updatedAt).getTime() : Date.now();
+          hasUnsavedCloudChanges = false;
+          updateSaveStatusBadge();
+        }
+      }, 350);
+
       if (activeContext.viewMode || userRole === 'student') {
         setTimeout(() => {
           try {
@@ -652,7 +1209,7 @@
   }
 
   // =========================================================
-  // 6. ON-DEMAND PDF EXPORT (NO R2 STORAGE COST!)
+  // 8. ON-DEMAND PDF EXPORT (NO R2 STORAGE COST!)
   // =========================================================
   async function exportCurrentNoteToPdf() {
     if (!window.__NR_API || !window.__NR_EDITOR || !window.__NR_EDITOR.doc) {
@@ -696,7 +1253,158 @@
   }
 
   // =========================================================
-  // 7. SAVE LESSON NOTE TO CLASS MODAL (FOR TEACHER)
+  // 9. CORE CLOUD SAVE & 1-CLICK QUICK SAVE (CTRL+S)
+  // =========================================================
+  async function executeSaveLessonToCloud({
+    selectedClassId,
+    selectedClassName,
+    lessonId,
+    noteId,
+    nextVersion,
+    chapter,
+    lessonDate,
+    title,
+    summary,
+    allowStudentPdf,
+    existingCreatedAt,
+    existingCoverUrl,
+    onProgress
+  }) {
+    isSavingToCloud = true;
+    updateSaveStatusBadge();
+
+    try {
+      const rawDoc = window.__NR_EDITOR.doc;
+      const pageCount = Array.isArray(rawDoc.pages) ? rawDoc.pages.length : 1;
+      const teacherId = (currentUser?.uid || currentUser?.id || 'teacher').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+      if (onProgress) onProgress('Đang tạo ảnh bìa thu nhỏ trang đầu...');
+      let coverUrl = existingCoverUrl || '';
+      try {
+        const coverDataUrl = await window.__NR_API.renderPageToDataUrl(rawDoc, 0, 0.35, 'image/webp', 0.78, false);
+        const coverRes = await fetch(coverDataUrl);
+        const coverBlob = await coverRes.blob();
+        coverUrl = await uploadBlobToR2(`notes/${teacherId}/${noteId}/cover.webp`, coverBlob, false);
+      } catch (eCov) {
+        console.warn('[SaveLesson] Cover render warning:', eCov);
+      }
+
+      const { cleanDoc, assetsManifest } = await extractAndDeduplicateDocAssets(rawDoc, teacherId, (msg) => {
+        if (onProgress) onProgress(msg);
+      });
+
+      if (onProgress) onProgress('Đang nén dữ liệu nét bút vector (.nrn) siêu nhẹ...');
+      const nrnBytes = await window.__NR_API.encode(cleanDoc);
+      const nrnBlob = new Blob([nrnBytes], { type: 'application/octet-stream' });
+      const r2Key = `notes/${teacherId}/${noteId}/v${nextVersion}.nrn`;
+      await uploadBlobToR2(r2Key, nrnBlob, false);
+
+      if (onProgress) onProgress('Đang đồng bộ bài giảng vào Lớp học trên QMath...');
+      const nowIso = new Date().toISOString();
+      const lessonPayload = {
+        id: lessonId,
+        classId: selectedClassId,
+        className: selectedClassName || '',
+        teacherId: currentUser?.uid || currentUser?.id || '',
+        teacherName: currentUser?.name || 'Giáo viên',
+        chapter,
+        title,
+        lessonDate,
+        summary,
+        noteId,
+        r2Key,
+        coverUrl,
+        pageCount,
+        sizeBytes: nrnBytes.byteLength,
+        version: nextVersion,
+        assetsManifest,
+        allowStudentPdf,
+        status: 'published',
+        createdAt: existingCreatedAt || nowIso,
+        updatedAt: nowIso
+      };
+
+      await sbUpsertConfig(`lesson_${lessonId}`, lessonPayload);
+      await sbUpsertConfig(`lnote_${noteId}`, {
+        id: noteId,
+        lessonId,
+        classId: selectedClassId,
+        teacherId: lessonPayload.teacherId,
+        title,
+        r2Key,
+        coverUrl,
+        pageCount,
+        sizeBytes: nrnBytes.byteLength,
+        version: nextVersion,
+        assetsManifest,
+        allowStudentPdf,
+        updatedAt: nowIso
+      });
+
+      currentLoadedLesson = lessonPayload;
+      activeContext.classId = selectedClassId;
+      activeContext.lessonId = lessonId;
+      document.title = `${title} - QMath Note`;
+
+      // Cập nhật trạng thái Đã lưu & đánh dấu bản backup nội bộ đã đồng bộ
+      const sigInfo = computeDocSignature(rawDoc);
+      lastCloudSavedSignature = sigInfo.sig;
+      lastCloudSavedAt = Date.now();
+      hasUnsavedCloudChanges = false;
+      await performLocalAutoBackup();
+
+      notifyLmsLessonSaved(lessonPayload);
+      return { lessonPayload, nrnByteLength: nrnBytes.byteLength };
+    } finally {
+      isSavingToCloud = false;
+      updateSaveStatusBadge();
+    }
+  }
+
+  async function quickSaveCurrentLessonToCloud() {
+    if (!currentLoadedLesson || !currentLoadedLesson.id || !currentLoadedLesson.classId) {
+      return openSaveToClassModal();
+    }
+    if (isSavingToCloud) return;
+
+    const quickBtn = document.getElementById('qmath-btn-quick-save');
+    const origHtml = quickBtn ? quickBtn.innerHTML : '';
+    if (quickBtn) {
+      quickBtn.disabled = true;
+      quickBtn.innerHTML = '<span>⏳</span> Đang lưu...';
+    }
+
+    try {
+      const nextVer = (Number(currentLoadedLesson.version) || 1) + 1;
+      const { lessonPayload, nrnByteLength } = await executeSaveLessonToCloud({
+        selectedClassId: currentLoadedLesson.classId,
+        selectedClassName: currentLoadedLesson.className || '',
+        lessonId: currentLoadedLesson.id,
+        noteId: currentLoadedLesson.noteId || ('note_' + Date.now().toString(36)),
+        nextVersion: nextVer,
+        chapter: currentLoadedLesson.chapter || 'Chuyên đề bài giảng',
+        lessonDate: currentLoadedLesson.lessonDate || new Date().toISOString().slice(0, 10),
+        title: currentLoadedLesson.title || 'Bài giảng QMath',
+        summary: currentLoadedLesson.summary || '',
+        allowStudentPdf: currentLoadedLesson.allowStudentPdf !== false,
+        existingCreatedAt: currentLoadedLesson.createdAt,
+        existingCoverUrl: currentLoadedLesson.coverUrl
+      });
+      const kb = (nrnByteLength / 1024).toFixed(1);
+      showToast(`✅ Đã lưu cập nhật "${lessonPayload.title}" (v${nextVer} • ${kb} KB) vào ${lessonPayload.className || 'Lớp học'}!`, 'success', 4000);
+    } catch (err) {
+      console.error('[QuickSave] Error:', err);
+      showToast('❌ Lỗi lưu nhanh: ' + err.message, 'error', 6000);
+    } finally {
+      if (quickBtn) {
+        quickBtn.disabled = false;
+        quickBtn.innerHTML = origHtml;
+      }
+    }
+  }
+
+  // =========================================================
+  // 10. SAVE LESSON NOTE TO CLASS MODAL (FOR TEACHER)
   // =========================================================
   async function openSaveToClassModal() {
     if (!window.__NR_EDITOR || !window.__NR_EDITOR.doc || !window.__NR_API) {
@@ -792,7 +1500,6 @@
     document.getElementById('qm-save-cancel').onclick = () => modal.remove();
     document.getElementById('qm-btn-export-local-pdf').onclick = () => exportCurrentNoteToPdf();
 
-    // Load classes & lessons from Supabase
     let classesList = [];
     let allLessons = [];
     try {
@@ -888,10 +1595,6 @@
       submitBtn.disabled = true;
 
       try {
-        const rawDoc = window.__NR_EDITOR.doc;
-        const pageCount = Array.isArray(rawDoc.pages) ? rawDoc.pages.length : 1;
-        const teacherId = (currentUser?.uid || currentUser?.id || 'teacher').replace(/[^a-zA-Z0-9_-]/g, '_');
-
         const isUpdate = selectedLessonId && selectedLessonId !== 'NEW';
         const existingLesson = isUpdate ? allLessons.find(l => l.id === selectedLessonId) : null;
         const lessonId = isUpdate
@@ -900,91 +1603,26 @@
         const noteId = existingLesson?.noteId || ('note_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
         const nextVersion = isUpdate ? ((Number(existingLesson?.version) || 1) + 1) : 1;
 
-        // Bước 1: Tạo ảnh bìa trang đầu (cover.webp ~ 15 KB)
-        progTxt.textContent = 'Đang tạo ảnh bìa thu nhỏ trang đầu (cover.webp)...';
-        let coverUrl = existingLesson?.coverUrl || '';
-        try {
-          const coverDataUrl = await window.__NR_API.renderPageToDataUrl(rawDoc, 0, 0.35, 'image/webp', 0.78, false);
-          const coverRes = await fetch(coverDataUrl);
-          const coverBlob = await coverRes.blob();
-          coverUrl = await uploadBlobToR2(`notes/${teacherId}/${noteId}/cover.webp`, coverBlob, false);
-        } catch (eCov) {
-          console.warn('[SaveLesson] Cover render warning:', eCov);
-        }
-
-        // Bước 2: Tách và chống trùng lặp ảnh đính kèm theo SHA-256
-        const { cleanDoc, assetsManifest } = await extractAndDeduplicateDocAssets(rawDoc, teacherId, (msg) => {
-          progTxt.textContent = msg;
-        });
-
-        // Bước 3: Nén dữ liệu vector .nrn (gzip JSON) và tải lên R2
-        progTxt.textContent = 'Đang nén dữ liệu nét vẽ vector (.nrn) và lưu lên đám mây R2...';
-        const nrnBytes = await window.__NR_API.encode(cleanDoc);
-        const nrnBlob = new Blob([nrnBytes], { type: 'application/octet-stream' });
-        const r2Key = `notes/${teacherId}/${noteId}/v${nextVersion}.nrn`;
-        await uploadBlobToR2(r2Key, nrnBlob, false);
-
-        // Bước 4: Lưu metadata vào Supabase (configurations: lesson_<id> & lnote_<id>)
-        progTxt.textContent = 'Đang đồng bộ bài giảng vào Lớp học trên QMath LMS...';
-        const nowIso = new Date().toISOString();
-        const lessonPayload = {
-          id: lessonId,
-          classId: selectedClassId,
-          className: selectedClassObj?.name || '',
-          teacherId: currentUser?.uid || currentUser?.id || '',
-          teacherName: currentUser?.name || 'Giáo viên',
-          chapter,
-          title,
-          lessonDate,
-          summary,
-          noteId,
-          r2Key,
-          coverUrl,
-          pageCount,
-          sizeBytes: nrnBytes.byteLength,
-          version: nextVersion,
-          assetsManifest,
-          allowStudentPdf,
-          status: 'published',
-          createdAt: existingLesson?.createdAt || nowIso,
-          updatedAt: nowIso
-        };
-
-        await sbUpsertConfig(`lesson_${lessonId}`, lessonPayload);
-        await sbUpsertConfig(`lnote_${noteId}`, {
-          id: noteId,
+        const { lessonPayload, nrnByteLength } = await executeSaveLessonToCloud({
+          selectedClassId,
+          selectedClassName: selectedClassObj?.name || '',
           lessonId,
-          classId: selectedClassId,
-          teacherId: lessonPayload.teacherId,
+          noteId,
+          nextVersion,
+          chapter,
+          lessonDate,
           title,
-          r2Key,
-          coverUrl,
-          pageCount,
-          sizeBytes: nrnBytes.byteLength,
-          version: nextVersion,
-          assetsManifest,
+          summary,
           allowStudentPdf,
-          updatedAt: nowIso
+          existingCreatedAt: existingLesson?.createdAt,
+          existingCoverUrl: existingLesson?.coverUrl,
+          onProgress: (msg) => { progTxt.textContent = msg; }
         });
 
-        currentLoadedLesson = lessonPayload;
-        activeContext.classId = selectedClassId;
-        activeContext.lessonId = lessonId;
-
-        // Thông báo cho cửa sổ LMS cha nếu có
-        try {
-          const targetWin = window.opener || (window.parent !== window ? window.parent : null);
-          if (targetWin) {
-            targetWin.postMessage({
-              type: 'QMATH_LESSON_NOTE_SAVED',
-              lesson: lessonPayload
-            }, '*');
-          }
-        } catch (e) {}
-
-        const kb = (nrnBytes.byteLength / 1024).toFixed(1);
-        progTxt.textContent = `✅ Đã lưu thành công "${title}" (${pageCount} trang, dung lượng vector chỉ ${kb} KB)!`;
-        setTimeout(() => modal.remove(), 1200);
+        const kb = (nrnByteLength / 1024).toFixed(1);
+        progTxt.textContent = `✅ Đã lưu thành công "${title}" (${lessonPayload.pageCount} trang, dung lượng vector chỉ ${kb} KB)!`;
+        showToast(`✅ Đã lưu bài giảng "${title}" vào ${selectedClassObj?.name || 'Lớp học'} (${kb} KB)!`, 'success', 5000);
+        setTimeout(() => modal.remove(), 900);
       } catch (err) {
         console.error('[SaveLesson] Error:', err);
         alert('Lỗi lưu bài giảng: ' + err.message);
@@ -995,7 +1633,7 @@
   }
 
   // =========================================================
-  // 8. OPEN SAVED LESSON MODAL (FOR TEACHER)
+  // 11. OPEN SAVED LESSON MODAL (FOR TEACHER)
   // =========================================================
   async function openLoadFromClassModal() {
     let existing = document.getElementById('qmath-open-lesson-modal');
@@ -1079,7 +1717,7 @@
   }
 
   // =========================================================
-  // 9. UI BARS FOR TEACHER & STUDENT VIEWER
+  // 12. UI BARS FOR TEACHER & STUDENT VIEWER
   // =========================================================
   function renderViewerBottomToolbar(lesson) {
     let vBar = document.getElementById('qmath-viewer-bottom-bar');
@@ -1143,25 +1781,31 @@
     if (lock) lock.remove();
 
     const isTeacher = userRole === 'teacher' || userRole === 'admin' || userRole === 'super_admin';
-    const roleTitle = isTeacher ? '👨‍🏫 Giáo viên' : '🎓 Học sinh';
+    const roleTitle = isTeacher ? '👨‍🏫' : '🎓';
     const badgeBg = isTeacher ? 'background: linear-gradient(135deg,#2563eb,#4f46e5);' : 'background: #0284c7;';
-    const displayName = (currentUser?.name || currentUser?.email || 'Thầy Choang').substring(0, 22);
+    const displayName = (currentUser?.name || currentUser?.email || 'Thầy Choang').substring(0, 18);
 
     const bar = document.createElement('div');
     bar.id = 'qmath-badge-bar';
     bar.innerHTML = `
-      <div style="position:fixed;top:8px;right:76px;z-index:9999;display:flex;align-items:center;gap:6px;font-family:system-ui,-apple-system,sans-serif;font-size:12px;">
-        <div style="${badgeBg} color:#fff;padding:5px 11px;border-radius:999px;font-weight:700;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
-          <span>${roleTitle}</span>
-          <span>•</span>
-          <span style="font-weight:600;">${displayName}</span>
-        </div>
+      <div style="position:fixed;top:8px;right:76px;z-index:9999;display:flex;align-items:center;gap:6px;font-family:system-ui,-apple-system,sans-serif;font-size:12px;flex-wrap:wrap;">
+        ${isTeacher && !activeContext.viewMode ? `
+          <div id="qmath-save-status-pill" title="Trạng thái lưu bài giảng và sao lưu tự động" style="background:#f8fafc;color:#64748b;border:1.5px solid #e2e8f0;padding:4px 10px;border-radius:999px;font-weight:700;font-size:11.5px;display:flex;align-items:center;gap:5px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+            <span>📝</span> <span>Bảng mới</span>
+          </div>
+          <button id="qmath-btn-quick-save" title="Lưu nhanh cập nhật vào bài hiện tại (Ctrl+S)" style="display:none;background:linear-gradient(135deg,#f59e0b,#ea580c);border:none;color:#fff;padding:5px 10px;border-radius:8px;font-weight:800;cursor:pointer;align-items:center;gap:4px;box-shadow:0 2px 6px rgba(234,88,12,0.3);">
+            <span>⚡</span> Lưu nhanh
+          </button>
+          <button id="qmath-btn-backups" title="Khôi phục từ bản nháp tự động lưu trong máy" style="background:#fff;border:1.5px solid #cbd5e1;color:#334155;padding:5px 9px;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+            <span>🛡️</span> Bản nháp
+          </button>
+        ` : ''}
 
         ${isTeacher ? `
           <button id="qmath-btn-open-cloud" title="Mở bài giảng đã lưu từ Lớp học" style="background:#fff;border:1.5px solid #cbd5e1;color:#1e293b;padding:5px 10px;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
             <span>📂</span> Mở bài lớp
           </button>
-          <button id="qmath-btn-save-cloud" title="Lưu bài giảng vào Lớp học theo Bài" style="background:linear-gradient(135deg,#059669,#10b981);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(16,185,129,0.3);">
+          <button id="qmath-btn-save-cloud" title="Lưu bài giảng vào Lớp học theo Bài (Ctrl+S)" style="background:linear-gradient(135deg,#059669,#10b981);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(16,185,129,0.3);">
             <span>💾</span> Lưu vào Lớp
           </button>
           <button id="qmath-btn-export-pdf" title="Xuất bài giảng hiện tại ra file PDF" style="background:#fff;border:1.5px solid #cbd5e1;color:#1e293b;padding:5px 10px;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
@@ -1172,6 +1816,11 @@
             <span>📄</span> Tải PDF
           </button>
         `}
+
+        <div style="${badgeBg} color:#fff;padding:5px 10px;border-radius:999px;font-weight:700;display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+          <span>${roleTitle}</span>
+          <span style="font-weight:600;">${displayName}</span>
+        </div>
 
         <button id="qmath-btn-logout" title="Đăng xuất" style="background:#fff;border:1.5px solid #e2e8f0;color:#64748b;padding:5px 8px;border-radius:8px;cursor:pointer;">
           ✕
@@ -1187,6 +1836,12 @@
     const btnSave = document.getElementById('qmath-btn-save-cloud');
     if (btnSave) btnSave.onclick = openSaveToClassModal;
 
+    const btnQuick = document.getElementById('qmath-btn-quick-save');
+    if (btnQuick) btnQuick.onclick = quickSaveCurrentLessonToCloud;
+
+    const btnBackups = document.getElementById('qmath-btn-backups');
+    if (btnBackups) btnBackups.onclick = openAutoBackupsModal;
+
     const btnOpen = document.getElementById('qmath-btn-open-cloud');
     if (btnOpen) btnOpen.onclick = openLoadFromClassModal;
 
@@ -1199,6 +1854,8 @@
         window.location.reload();
       }
     };
+
+    updateSaveStatusBadge();
   }
 
   if (document.readyState === 'loading') {
