@@ -815,3 +815,10 @@ body.dark .quicknote-card:hover {
 body.dark .quicknote-card span {
   color: #e2e8f0 !important;
 }
+/* Suppress native CSS cursor on drawing tools so only GPU DOM overlay is shown */
+html:not(.mobile) .board .board-scroller[data-tool=pen],
+html:not(.mobile) .board .board-scroller[data-tool=highlighter],
+html:not(.mobile) .board .board-scroller[data-tool=scratch],
+html:not(.mobile) .board .board-scroller[data-tool=laser] {
+  cursor: none !important;
+}
