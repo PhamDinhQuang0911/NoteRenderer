@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'noterenderer-pwa-v062-merged-v8';
+﻿const CACHE_NAME = 'noterenderer-pwa-v062-merged-v9';
 const PRECACHE_ASSETS = [
   './',
   './index.html',
@@ -26,4 +26,5 @@ self.addEventListener('fetch', (e) => {
     fetch(e.request).catch(() => caches.match(e.request))
   );
 });
+
 
