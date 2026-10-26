@@ -3755,8 +3755,7 @@ function SaveLectureVideoModal({ data, te, notify: n, onClose: t }) {
       }
     }
 
-    // 2. Telegram Save handling
-        // 2. Cloud Save handling (Direct upload on Web & Desktop)
+    // 2. Cloud Save handling (Direct upload on Web & Desktop)
     if (saveTelegram && data?.blob) {
       if (!cfg.botToken || !cfg.chatId) {
         n && n("Chưa cấu hình Kho Lưu Trữ. Vui lòng vào Cài đặt Kho Lưu Trữ.");
@@ -3767,7 +3766,6 @@ function SaveLectureVideoModal({ data, te, notify: n, onClose: t }) {
           "🎬 Bài giảng: " + finalTitle + "\n📅 Ngày ghi: " + new Date().toLocaleString("vi-VN")
         );
       }
-    }
     }
 
     t();
