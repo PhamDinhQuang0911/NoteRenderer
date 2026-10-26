@@ -1328,12 +1328,19 @@ body.dark .quicknote-card span {
   cursor: not-allowed !important;
 }
 
-/* Suppress native CSS cursor on drawing tools so only GPU DOM overlay is shown */
+/* Completely hide simulated DOM cursor overlay */
+.board-cursor-overlay {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+/* Native hardware cursor for drawing tools */
 html:not(.mobile) .board .board-scroller[data-tool=pen],
 html:not(.mobile) .board .board-scroller[data-tool=highlighter],
 html:not(.mobile) .board .board-scroller[data-tool=scratch],
 html:not(.mobile) .board .board-scroller[data-tool=laser] {
-  cursor: none !important;
+  cursor: crosshair;
 }
 
 /* Fullscreen Classroom Mode & Recording Quality Styles (062v37) */
