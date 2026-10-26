@@ -1335,3 +1335,39 @@ html:not(.mobile) .board .board-scroller[data-tool=scratch],
 html:not(.mobile) .board .board-scroller[data-tool=laser] {
   cursor: none !important;
 }
+
+/* Fullscreen Classroom Mode & Recording Quality Styles (062v37) */
+body.nr-fullscreen {
+  overflow: hidden !important;
+}
+body.nr-fullscreen .tab-bar {
+  display: none !important;
+}
+body.nr-fullscreen .app {
+  height: 100vh !important;
+  width: 100vw !important;
+}
+body.nr-fullscreen .work {
+  height: 100% !important;
+  max-height: 100vh !important;
+}
+body.nr-fullscreen .toolbar .tb-title {
+  display: none !important;
+}
+.rec-quality-select {
+  height: 28px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  margin: 0 4px;
+}
+.rec-quality-select option {
+  background: #1e293b;
+  color: #fff;
+}

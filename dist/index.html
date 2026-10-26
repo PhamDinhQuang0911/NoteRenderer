@@ -23,7 +23,7 @@
     <script>
       // Clear outdated PWA cache and force SW update on client browsers
       (function() {
-        const CURRENT_VER = 'v36';
+        const CURRENT_VER = 'v37';
         try {
           if ('caches' in window) {
             caches.keys().then(function(names) {
@@ -44,14 +44,14 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" crossorigin src="./assets/index--cPWPmO5.js?v=062v36"></script>
-    <script type="module" crossorigin src="./assets/ai-math-assistant.js?v=062v36"></script>
-    <script type="module" crossorigin src="./assets/qmath-lms-auth.js?v=062v36"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CA_0RsQs.css?v=062v36">
+    <script type="module" crossorigin src="./assets/index--cPWPmO5.js?v=062v37"></script>
+    <script type="module" crossorigin src="./assets/ai-math-assistant.js?v=062v37"></script>
+    <script type="module" crossorigin src="./assets/qmath-lms-auth.js?v=062v37"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CA_0RsQs.css?v=062v37">
     <script>
       if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=062v36').catch(() => {});
+          navigator.serviceWorker.register('./sw.js?v=062v37').catch(() => {});
         });
       }
     </script>
