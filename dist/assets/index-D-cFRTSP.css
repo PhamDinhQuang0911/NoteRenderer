@@ -861,6 +861,341 @@ body.dark .quicknote-card span {
   box-shadow: 0 1.5px 4px rgba(0, 0, 0, 0.12) !important;
 }
 
+
+/* === TELEGRAM LECTURE CLOUD & IN-APP VIDEO PLAYER STYLES === */
+.telegram-settings-dialog {
+  width: 520px !important;
+  max-width: 94vw !important;
+}
+.telegram-settings-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  padding: 6px 4px !important;
+}
+.tg-tip-box {
+  padding: 10px 12px !important;
+  background: #f0fdf4 !important;
+  border: 1px solid #bbf7d0 !important;
+  border-radius: 8px !important;
+  font-size: 12.5px !important;
+  color: #166534 !important;
+  line-height: 1.4 !important;
+}
+.tg-tip-box p {
+  margin: 3px 0 0 !important;
+}
+.tg-field-label {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 5px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+}
+.tg-field-label input,
+.tg-field-label select {
+  padding: 8px 10px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  font-size: 13.5px !important;
+  background: #fff !important;
+  color: #0f172a !important;
+  outline: none !important;
+  transition: border-color .15s !important;
+}
+.tg-field-label input:focus,
+.tg-field-label select:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59,130,246,.15) !important;
+}
+.tg-input-wrap {
+  display: flex !important;
+  gap: 6px !important;
+}
+.tg-input-wrap input {
+  flex: 1 !important;
+}
+.tg-eye-btn {
+  padding: 0 12px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  background: #f8fafc !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+}
+.tg-check-label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 13px !important;
+  cursor: pointer !important;
+  margin: 4px 0 !important;
+}
+.tg-check-label input {
+  width: 16px !important;
+  height: 16px !important;
+  accent-color: var(--accent, #d32f2f) !important;
+}
+.tg-status-box {
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+  font-size: 12.5px !important;
+  line-height: 1.35 !important;
+}
+.tg-status-box.success {
+  background: #ecfdf5 !important;
+  border: 1px solid #a7f3d0 !important;
+  color: #065f46 !important;
+}
+.tg-status-box.error {
+  background: #fef2f2 !important;
+  border: 1px solid #fecaca !important;
+  color: #991b1b !important;
+}
+.tg-btn-row {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  margin-top: 8px !important;
+}
+.tg-btn-test {
+  padding: 8px 14px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  background: #f8fafc !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all .15s !important;
+}
+.tg-btn-test:hover:not(:disabled) {
+  background: #f1f5f9 !important;
+}
+.tg-btn-save {
+  padding: 8px 18px !important;
+  border: none !important;
+  border-radius: 6px !important;
+  background: var(--accent, #d32f2f) !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+}
+
+/* Lecture Video Dialog & Player */
+.lecture-video-dialog {
+  width: 760px !important;
+  max-width: 95vw !important;
+}
+.lecture-video-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+.lv-video-container {
+  position: relative !important;
+  width: 100% !important;
+  aspect-ratio: 16 / 9 !important;
+  background: #0f172a !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.lv-video-element {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+.lv-loading {
+  color: #94a3b8 !important;
+  font-size: 14px !important;
+}
+.lv-no-stream {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 10px !important;
+  color: #e2e8f0 !important;
+  padding: 20px !important;
+  text-align: center !important;
+}
+.lv-telegram-open-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 8px 16px !important;
+  background: #0284c7 !important;
+  color: #fff !important;
+  text-decoration: none !important;
+  border-radius: 8px !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+}
+.lv-controls-bar {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 4px 2px !important;
+}
+.lv-speeds {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 12.5px !important;
+  color: #475569 !important;
+}
+.lv-speed-btn {
+  padding: 4px 8px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+}
+.lv-speed-btn.on {
+  background: var(--accent, #d32f2f) !important;
+  color: #fff !important;
+  border-color: var(--accent, #d32f2f) !important;
+  font-weight: 600 !important;
+}
+.lv-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+.lv-btn-link {
+  font-size: 12.5px !important;
+  color: #0284c7 !important;
+  text-decoration: none !important;
+  font-weight: 500 !important;
+}
+.lv-btn-link:hover {
+  text-decoration: underline !important;
+}
+.lv-btn-remove {
+  padding: 4px 10px !important;
+  border: 1px solid #fca5a5 !important;
+  background: #fff1f2 !important;
+  color: #e11d48 !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+}
+.lv-empty-state {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  padding: 24px 16px !important;
+  text-align: center !important;
+  gap: 8px !important;
+}
+.lv-empty-icon {
+  font-size: 42px !important;
+}
+.lv-empty-state h4 {
+  margin: 0 !important;
+  font-size: 16px !important;
+  color: #1e293b !important;
+}
+.lv-empty-state p {
+  margin: 0 !important;
+  font-size: 13px !important;
+  color: #64748b !important;
+  max-width: 480px !important;
+}
+.lv-manual-input {
+  display: flex !important;
+  gap: 8px !important;
+  width: 100% !important;
+  max-width: 480px !important;
+  margin-top: 8px !important;
+}
+.lv-manual-input input {
+  flex: 1 !important;
+  padding: 8px 10px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+}
+.lv-cfg-btn {
+  padding: 6px 14px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  background: #f8fafc !important;
+  font-size: 12.5px !important;
+  cursor: pointer !important;
+}
+
+/* Upload Progress Overlay */
+.tg-upload-overlay {
+  position: fixed !important;
+  right: 20px !important;
+  bottom: 24px !important;
+  z-index: 10000 !important;
+  width: 340px !important;
+  max-width: calc(100vw - 32px) !important;
+  background: #ffffff !important;
+  border: 1.5px solid #3b82f6 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2) !important;
+  padding: 14px !important;
+  animation: slideInUp .25s ease-out !important;
+}
+.tg-upload-head {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 13px !important;
+  color: #1e293b !important;
+  margin-bottom: 8px !important;
+}
+.tg-spinner {
+  width: 16px !important;
+  height: 16px !important;
+  border: 2px solid #cbd5e1 !important;
+  border-top-color: #3b82f6 !important;
+  border-radius: 50% !important;
+  animation: tgSpin .8s linear infinite !important;
+}
+@keyframes tgSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes slideInUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.tg-progress-bar {
+  width: 100% !important;
+  height: 8px !important;
+  background: #e2e8f0 !important;
+  border-radius: 4px !important;
+  overflow: hidden !important;
+}
+.tg-progress-fill {
+  height: 100% !important;
+  background: linear-gradient(90deg, #3b82f6, #06b6d4) !important;
+  transition: width .2s ease !important;
+}
+.tg-upload-footer {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-top: 6px !important;
+  font-size: 11.5px !important;
+  color: #64748b !important;
+}
+.tg-cancel-btn {
+  padding: 2px 8px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  background: #fff !important;
+  font-size: 11px !important;
+  cursor: pointer !important;
+}
+
 /* Suppress native CSS cursor on drawing tools so only GPU DOM overlay is shown */
 html:not(.mobile) .board .board-scroller[data-tool=pen],
 html:not(.mobile) .board .board-scroller[data-tool=highlighter],
