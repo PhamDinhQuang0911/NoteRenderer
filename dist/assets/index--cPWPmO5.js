@@ -3272,11 +3272,14 @@ function QuickNoteModal({ onClose: t, onPick: e }) {
 // === TELEGRAM LECTURE CLOUD & IN-APP VIDEO PLAYER (062v22) ===
 const TelegramLectureService = {
   getConfig() {
+    const def = { botToken: "8662985318:AAHIweMUW706XKIXFi-bFisaFoE7hZaMHDo", chatId: "@kho_video_qmath_2026", autoUpload: !0, bitrate: "lecture" };
     try {
       const saved = localStorage.getItem("telegram_lecture_config");
-      return saved ? JSON.parse(saved) : { botToken: "", chatId: "", autoUpload: !0, bitrate: "lecture" };
+      if (!saved) return def;
+      const p = JSON.parse(saved);
+      return { botToken: p.botToken || def.botToken, chatId: p.chatId || def.chatId, autoUpload: p.autoUpload !== undefined ? p.autoUpload : !0, bitrate: p.bitrate || "lecture" };
     } catch {
-      return { botToken: "", chatId: "", autoUpload: !0, bitrate: "lecture" };
+      return def;
     }
   },
 
