@@ -1,30 +1,34 @@
-const CACHE_NAME = 'noterenderer-pwa-v062-merged-v23';
+const CACHE_NAME = 'noterenderer-pwa-v062-merged-v25';
 const PRECACHE_ASSETS = [
-  './',
-  './index.html',
   './favicon.png',
   './manifest.webmanifest'
 ];
 
 self.addEventListener('install', (e) => {
+  self.skipWaiting();
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS))
   );
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => Promise.all(
-      keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+      keys.map((k) => caches.delete(k))
     )).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // Network first for HTML, JS and CSS to guarantee fresh code
+  if (e.request.mode === 'navigate' || e.request.url.includes('.html') || e.request.url.includes('.js') || e.request.url.includes('.css')) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request))
+    );
+    return;
+  }
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    caches.match(e.request).then((res) => res || fetch(e.request))
   );
 });
-
-
