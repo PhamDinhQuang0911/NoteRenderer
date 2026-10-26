@@ -487,6 +487,9 @@
       : new Uint8Array(record.nrnBytes);
     const decodedDoc = await window.__NR_API.decode(bytes);
     await hydrateDocAssetsFromR2(decodedDoc);
+      if (currentLoadedLesson && currentLoadedLesson.video && !decodedDoc.telegramVideo) {
+        decodedDoc.telegramVideo = currentLoadedLesson.video;
+      }
 
     const docTitle = record.title || 'Bản khôi phục';
     if (typeof window.__NR_OPEN_DOC === 'function') {
@@ -1268,6 +1271,8 @@
     allowStudentPdf,
     existingCreatedAt,
     existingCoverUrl,
+    attachedMaterials,
+    existingLesson,
     onProgress
   }) {
     isSavingToCloud = true;
@@ -1319,6 +1324,8 @@
         version: nextVersion,
         assetsManifest,
         allowStudentPdf,
+        video: rawDoc.telegramVideo || rawDoc.lectureVideo || existingLesson?.video || null,
+        materials: attachedMaterials || existingLesson?.materials || [],
         status: 'published',
         createdAt: existingCreatedAt || nowIso,
         updatedAt: nowIso
@@ -1404,7 +1411,226 @@
   }
 
   // =========================================================
-  // 10. SAVE LESSON NOTE TO CLASS MODAL (FOR TEACHER)
+  // 10. UTILITIES, VIDEO PLAYER & COPY TO CLASSES (QMath Smart Hub)
+  // =========================================================
+  function formatDuration(sec) {
+    if (!sec || sec <= 0) return '00:00';
+    const totalSec = Math.round(Number(sec) || 0);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    const h = Math.floor(m / 60);
+    if (h > 0) {
+      const rm = m % 60;
+      return `${h}:${rm < 10 ? '0' : ''}${rm}:${s < 10 ? '0' : ''}${s}`;
+    }
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  }
+
+  function openVideoPlayerModal(video, lessonTitle) {
+    if (!video) return;
+    let old = document.getElementById('qmath-video-player-modal');
+    if (old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'qmath-video-player-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(15,23,42,0.85);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,sans-serif;';
+    
+    const streamUrl = video.streamUrl || video.url || '';
+    const tmeUrl = video.tmeUrl || '';
+    const title = lessonTitle || video.title || 'Video Bài Giảng';
+    const mb = video.size ? (video.size / (1024 * 1024)).toFixed(1) : (video.sizeBytes ? (video.sizeBytes / (1024 * 1024)).toFixed(1) : '');
+
+    modal.innerHTML = `
+      <div style="background:#0f172a;max-width:820px;width:100%;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.12);overflow:hidden;color:#fff;">
+        <div style="padding:16px 22px;background:#1e293b;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:20px;">🎬</span>
+            <div>
+              <h3 style="margin:0;font-size:16px;font-weight:800;color:#f8fafc;">${title}</h3>
+              <p style="margin:2px 0 0;font-size:11.5px;color:#94a3b8;">
+                ${video.duration ? '⏱️ ' + formatDuration(video.duration) : ''}
+                ${mb ? ' • 📦 ' + mb + ' MB' : ''} • Lưu trữ Đám mây
+              </p>
+            </div>
+          </div>
+          <button id="qm-vp-close" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;font-weight:700;">✕</button>
+        </div>
+
+        <div style="padding:18px 22px;background:#090d16;">
+          ${streamUrl ? `
+            <div style="position:relative;border-radius:12px;overflow:hidden;background:#000;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+              <video id="qm-video-el" src="${streamUrl}" controls playsinline autoplay style="width:100%;max-height:65vh;display:block;outline:none;"></video>
+            </div>
+          ` : `
+            <div style="text-align:center;padding:40px 20px;background:#1e293b;border-radius:14px;border:1px dashed rgba(255,255,255,0.2);">
+              <p style="font-size:15px;font-weight:700;margin-bottom:8px;color:#f8fafc;">Video đã được lưu an toàn trong Kho Lưu Trữ Đám Mây</p>
+              <p style="font-size:12.5px;color:#94a3b8;margin-bottom:18px;">Bạn có thể mở xem trực tiếp trong Kho lưu trữ với chất lượng tối đa:</p>
+              ${tmeUrl ? `
+                <a href="${tmeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;font-weight:800;font-size:13.5px;box-shadow:0 4px 14px rgba(37,99,235,0.4);">
+                  <span>☁️</span> Mở xem trong Kho Lưu Trữ ↗
+                </a>
+              ` : ''}
+            </div>
+          `}
+
+          <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:12px;color:#94a3b8;margin-right:4px;">Tốc độ:</span>
+              <button class="qm-speed-btn" data-spd="0.75" style="padding:5px 9px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#fff;cursor:pointer;font-size:11.5px;font-weight:700;">0.75x</button>
+              <button class="qm-speed-btn" data-spd="1" style="padding:5px 9px;border-radius:6px;border:1px solid #3b82f6;background:#2563eb;color:#fff;cursor:pointer;font-size:11.5px;font-weight:700;">1x</button>
+              <button class="qm-speed-btn" data-spd="1.25" style="padding:5px 9px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#fff;cursor:pointer;font-size:11.5px;font-weight:700;">1.25x</button>
+              <button class="qm-speed-btn" data-spd="1.5" style="padding:5px 9px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#fff;cursor:pointer;font-size:11.5px;font-weight:700;">1.5x</button>
+              <button class="qm-speed-btn" data-spd="2" style="padding:5px 9px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#fff;cursor:pointer;font-size:11.5px;font-weight:700;">2x</button>
+            </div>
+            ${tmeUrl ? `
+              <a href="${tmeUrl}" target="_blank" rel="noopener noreferrer" style="color:#60a5fa;text-decoration:none;font-size:12px;font-weight:700;">
+                Mở trong Kho Lưu Trữ ↗
+              </a>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('qm-vp-close').onclick = () => modal.remove();
+    const vidEl = document.getElementById('qm-video-el');
+    if (vidEl) {
+      modal.querySelectorAll('.qm-speed-btn').forEach(b => {
+        b.onclick = () => {
+          const spd = parseFloat(b.getAttribute('data-spd'));
+          vidEl.playbackRate = spd;
+          modal.querySelectorAll('.qm-speed-btn').forEach(x => {
+            x.style.background = 'rgba(255,255,255,0.06)';
+            x.style.borderColor = 'rgba(255,255,255,0.15)';
+          });
+          b.style.background = '#2563eb';
+          b.style.borderColor = '#3b82f6';
+        };
+      });
+    }
+  }
+
+  async function openCopyLessonModal(lesson, classesList, onComplete) {
+    let old = document.getElementById('qmath-copy-lesson-modal');
+    if (old) old.remove();
+
+    const otherClasses = (classesList || []).filter(c => c.id !== lesson.classId);
+    if (otherClasses.length === 0) {
+      alert('Chưa có lớp học khác trên hệ thống để sao chép bài giảng sang!');
+      return;
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'qmath-copy-lesson-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(15,23,42,0.8);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,sans-serif;';
+    modal.innerHTML = `
+      <div style="background:#fff;max-width:520px;width:100%;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.4);overflow:hidden;color:#1e293b;">
+        <div style="padding:18px 22px;background:linear-gradient(135deg,#4f46e5,#3b82f6);color:#fff;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <h3 style="margin:0;font-size:16px;font-weight:800;">📋 Sao Chép Bài Giảng Sang Lớp Khác</h3>
+            <p style="margin:3px 0 0;font-size:12px;opacity:0.9;">Tái sử dụng bài học, video và học liệu sang nhiều lớp cùng lúc</p>
+          </div>
+          <button id="qm-cp-close" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:30px;height:30px;border-radius:8px;cursor:pointer;font-weight:700;">✕</button>
+        </div>
+
+        <div style="padding:18px 22px;font-size:13px;">
+          <div style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:14px;">
+            <div style="font-size:11px;font-weight:700;color:#6366f1;">BÀI GIẢNG ĐƯỢC SAO CHÉP:</div>
+            <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${lesson.title}</div>
+            <div style="font-size:11.5px;color:#64748b;margin-top:2px;">
+              📄 ${lesson.pageCount || 1} trang ghi chép
+              ${lesson.video ? ' • 🎬 Có Video bài giảng' : ''}
+              ${lesson.materials?.length ? ' • 📎 ' + lesson.materials.length + ' file học liệu' : ''}
+            </div>
+          </div>
+
+          <label style="font-weight:700;display:block;margin-bottom:8px;">Chọn các Lớp học đích sẽ nhận bài giảng này:</label>
+          <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;border:1.5px solid #e2e8f0;padding:10px;border-radius:12px;background:#fff;">
+            ${otherClasses.map(c => `
+              <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
+                <input type="checkbox" class="qm-cp-class-chk" value="${c.id}" data-cname="${c.name}" style="width:16px;height:16px;cursor:pointer;" />
+                <span style="font-weight:700;color:#0f172a;">${c.name}</span>
+              </label>
+            `).join('')}
+          </div>
+
+          <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;">
+            <button id="qm-cp-select-all" style="background:none;border:none;color:#4f46e5;font-weight:700;font-size:12px;cursor:pointer;padding:0;">
+              ☑️ Chọn tất cả lớp
+            </button>
+            <span style="font-size:11.5px;color:#64748b;">(Tối ưu 100% dung lượng đám mây)</span>
+          </div>
+
+          <div id="qm-cp-status" style="display:none;margin-top:12px;padding:10px;border-radius:8px;background:#eff6ff;color:#1e40af;font-weight:700;font-size:12px;"></div>
+        </div>
+
+        <div style="padding:14px 22px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;">
+          <button id="qm-cp-cancel" style="padding:9px 15px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#64748b;font-weight:700;font-size:13px;cursor:pointer;">Hủy</button>
+          <button id="qm-cp-submit" style="padding:9px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#4f46e5,#3b82f6);color:#fff;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 4px 12px rgba(79,70,229,0.3);">
+            🚀 Sao Chép Sang Lớp Đã Chọn
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('qm-cp-close').onclick = () => modal.remove();
+    document.getElementById('qm-cp-cancel').onclick = () => modal.remove();
+
+    let allChecked = false;
+    document.getElementById('qm-cp-select-all').onclick = () => {
+      allChecked = !allChecked;
+      modal.querySelectorAll('.qm-cp-class-chk').forEach(chk => { chk.checked = allChecked; });
+      document.getElementById('qm-cp-select-all').textContent = allChecked ? '⏹️ Bỏ chọn tất cả' : '☑️ Chọn tất cả lớp';
+    };
+
+    document.getElementById('qm-cp-submit').onclick = async () => {
+      const selectedBoxes = Array.from(modal.querySelectorAll('.qm-cp-class-chk:checked'));
+      if (selectedBoxes.length === 0) {
+        alert('Vui lòng chọn ít nhất 1 Lớp học để sao chép bài giảng!');
+        return;
+      }
+
+      const stBox = document.getElementById('qm-cp-status');
+      const submitBtn = document.getElementById('qm-cp-submit');
+      stBox.style.display = 'block';
+      submitBtn.disabled = true;
+
+      try {
+        let count = 0;
+        for (const chk of selectedBoxes) {
+          const targetClassId = chk.value;
+          const targetClassName = chk.getAttribute('data-cname') || 'Lớp học';
+          stBox.textContent = `Đang sao chép sang ${targetClassName} (${count + 1}/${selectedBoxes.length})...`;
+
+          const newLessonId = 'les_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+          const clonedLesson = {
+            ...lesson,
+            id: newLessonId,
+            classId: targetClassId,
+            className: targetClassName,
+            title: lesson.title,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+
+          await sbUpsertConfig(`lesson_${newLessonId}`, clonedLesson);
+          count++;
+        }
+
+        showToast(`🎉 Đã sao chép thành công bài giảng sang ${count} lớp học!`, 'success', 5000);
+        modal.remove();
+        if (typeof onComplete === 'function') onComplete();
+      } catch (err) {
+        stBox.textContent = 'Lỗi sao chép: ' + err.message;
+        submitBtn.disabled = false;
+      }
+    };
+  }
+
+  // =========================================================
+  // 11. SAVE LESSON NOTE & MATERIALS TO CLASS (FOR TEACHER)
   // =========================================================
   async function openSaveToClassModal() {
     if (!window.__NR_EDITOR || !window.__NR_EDITOR.doc || !window.__NR_API) {
@@ -1415,15 +1641,19 @@
     let existingModal = document.getElementById('qmath-save-lesson-modal');
     if (existingModal) existingModal.remove();
 
+    const rawDoc = window.__NR_EDITOR.doc;
+    const currentVideo = rawDoc.telegramVideo || rawDoc.lectureVideo || currentLoadedLesson?.video || null;
+    let attachedMaterials = Array.isArray(currentLoadedLesson?.materials) ? [...currentLoadedLesson.materials] : [];
+
     const modal = document.createElement('div');
     modal.id = 'qmath-save-lesson-modal';
     modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,sans-serif;';
     modal.innerHTML = `
-      <div style="background:#fff;max-width:540px;width:100%;border-radius:20px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);overflow:hidden;">
+      <div style="background:#fff;max-width:580px;width:100%;border-radius:20px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);overflow:hidden;">
         <div style="background:linear-gradient(135deg,#1e40af,#3b82f6);padding:18px 22px;color:#fff;display:flex;align-items:center;justify-content:space-between;">
           <div>
             <h3 style="margin:0;font-size:17px;font-weight:800;">💾 Lưu Bài Giảng Vào Lớp Học</h3>
-            <p style="margin:3px 0 0;font-size:12px;opacity:0.9;">Lưu vector siêu nhẹ (.nrn) • Học sinh xem lại nét căng & Xuất PDF khi cần</p>
+            <p style="margin:3px 0 0;font-size:12px;opacity:0.9;">Ghi chép vector siêu nhẹ (.nrn) • Video 1:1 • Học liệu đính kèm</p>
           </div>
           <button id="qm-save-close" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:30px;height:30px;border-radius:8px;cursor:pointer;font-weight:800;">✕</button>
         </div>
@@ -1446,7 +1676,7 @@
           <div style="display:grid;grid-template-columns:1fr 140px;gap:10px;margin-bottom:14px;">
             <div>
               <label style="font-weight:700;display:block;margin-bottom:5px;">Chuyên đề / Chương</label>
-              <input id="qm-save-chapter" type="text" placeholder="VD: Chương 1 - Hàm số" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:13px;" />
+              <input id="qm-save-chapter" type="text" placeholder="VD: Chương 1 - Căn bậc hai" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:13px;" />
             </div>
             <div>
               <label style="font-weight:700;display:block;margin-bottom:5px;">Ngày dạy</label>
@@ -1456,7 +1686,48 @@
 
           <div style="margin-bottom:14px;">
             <label style="font-weight:700;display:block;margin-bottom:5px;">Tên bài giảng / Buổi học *</label>
-            <input id="qm-save-title" type="text" placeholder="VD: Buổi 12 - Cực trị của hàm số chứa dấu giá trị tuyệt đối" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:13.5px;" />
+            <input id="qm-save-title" type="text" placeholder="VD: Buổi 1 - Hằng đẳng thức và Căn bậc hai" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:13.5px;" />
+          </div>
+
+          <!-- VIDEO STATUS BOX 1:1 -->
+          <div style="margin-bottom:14px;padding:12px;border-radius:12px;border:1.5px solid ${currentVideo ? '#bbf7d0' : '#e2e8f0'};background:${currentVideo ? '#f0fdf4' : '#f8fafc'};">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-weight:700;color:${currentVideo ? '#15803d' : '#475569'};font-size:12.5px;">
+                🎬 Video bài giảng đi kèm (Tỷ lệ 1:1):
+              </span>
+              ${currentVideo ? `
+                <span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">ĐÃ SẴN SÀNG</span>
+              ` : `
+                <span style="background:#94a3b8;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;">CHƯA QUAY</span>
+              `}
+            </div>
+            ${currentVideo ? `
+              <div style="margin-top:6px;font-size:12px;color:#166534;font-weight:600;">
+                ▶ ${currentVideo.title || 'Video bài giảng'} (${currentVideo.duration ? formatDuration(currentVideo.duration) : ''}${currentVideo.size ? ' • ' + (currentVideo.size / (1024*1024)).toFixed(1) + ' MB' : ''})
+              </div>
+            ` : `
+              <div style="margin-top:6px;font-size:12px;color:#64748b;">
+                Chưa có video. Bạn có thể bấm nút [🎬] trên thanh công cụ để ghi hình hoặc dán link video kho lưu trữ vào đây:
+                <input id="qm-save-manual-video" type="text" placeholder="Dán link video kho lưu trữ..." style="margin-top:6px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px;" />
+              </div>
+            `}
+          </div>
+
+          <!-- MATERIALS ATTACHMENT SECTION -->
+          <div style="margin-bottom:14px;padding:12px;border-radius:12px;border:1.5px solid #e2e8f0;background:#f8fafc;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <span style="font-weight:700;color:#0f172a;font-size:12.5px;">📎 Học liệu & Tài liệu đính kèm (Phiếu BT, Word, PDF...):</span>
+              <label style="background:#2563eb;color:#fff;padding:5px 10px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+                <span>+ Thêm file</span>
+                <input type="file" id="qm-save-material-file" multiple style="display:none;" />
+              </label>
+            </div>
+            <div id="qm-save-materials-list" style="display:flex;flex-direction:column;gap:5px;">
+              ${attachedMaterials.length === 0 ? '<div style="color:#94a3b8;font-size:12px;padding:4px 0;">Chưa có học liệu đính kèm.</div>' : ''}
+            </div>
+            <div id="qm-material-upload-progress" style="display:none;margin-top:6px;font-size:11.5px;color:#2563eb;font-weight:700;">
+              ⏳ Đang tải file học liệu lên đám mây...
+            </div>
           </div>
 
           <div style="margin-bottom:14px;">
@@ -1499,6 +1770,69 @@
     document.getElementById('qm-save-close').onclick = () => modal.remove();
     document.getElementById('qm-save-cancel').onclick = () => modal.remove();
     document.getElementById('qm-btn-export-local-pdf').onclick = () => exportCurrentNoteToPdf();
+
+    // Render materials chips list
+    const matListEl = document.getElementById('qm-save-materials-list');
+    const renderMaterials = () => {
+      if (attachedMaterials.length === 0) {
+        matListEl.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:4px 0;">Chưa có học liệu đính kèm.</div>';
+        return;
+      }
+      matListEl.innerHTML = attachedMaterials.map((m, idx) => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;font-size:12px;">
+          <div style="display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            <span>📎</span>
+            <span style="font-weight:700;color:#0f172a;">${m.name}</span>
+            <span style="color:#64748b;font-size:11px;">(${(m.size / 1024).toFixed(0)} KB)</span>
+          </div>
+          <button data-del-mat="${idx}" style="background:none;border:none;color:#ef4444;cursor:pointer;font-weight:800;font-size:13px;padding:2px 6px;">✕</button>
+        </div>
+      `).join('');
+
+      matListEl.querySelectorAll('[data-del-mat]').forEach(btn => {
+        btn.onclick = () => {
+          const i = parseInt(btn.getAttribute('data-del-mat'), 10);
+          attachedMaterials.splice(i, 1);
+          renderMaterials();
+        };
+      });
+    };
+    renderMaterials();
+
+    // File input handler for materials
+    const matInput = document.getElementById('qm-save-material-file');
+    matInput.onchange = async () => {
+      const files = Array.from(matInput.files || []);
+      if (files.length === 0) return;
+      const prog = document.getElementById('qm-material-upload-progress');
+      prog.style.display = 'block';
+
+      try {
+        const teacherId = (currentUser?.uid || currentUser?.id || 'teacher').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const noteId = currentLoadedLesson?.noteId || ('note_' + Date.now().toString(36));
+
+        for (const f of files) {
+          prog.textContent = `⏳ Đang tải file "${f.name}" (${(f.size/1024).toFixed(0)} KB)...`;
+          const cleanName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const r2Key = `notes/${teacherId}/${noteId}/materials/${cleanName}`;
+          const fileUrl = await uploadBlobToR2(r2Key, f, false);
+          attachedMaterials.push({
+            name: f.name,
+            size: f.size,
+            type: f.type || 'application/octet-stream',
+            url: fileUrl,
+            uploadedAt: new Date().toISOString()
+          });
+        }
+        renderMaterials();
+        showToast(`✅ Đã tải lên ${files.length} file học liệu thành công!`, 'success');
+      } catch (err) {
+        alert('Lỗi tải file học liệu: ' + err.message);
+      } finally {
+        prog.style.display = 'none';
+        matInput.value = '';
+      }
+    };
 
     let classesList = [];
     let allLessons = [];
@@ -1549,6 +1883,10 @@
           document.getElementById('qm-save-title').value = found.title || '';
           document.getElementById('qm-save-summary').value = found.summary || '';
           if (found.lessonDate) document.getElementById('qm-save-date').value = found.lessonDate;
+          if (Array.isArray(found.materials) && attachedMaterials.length === 0) {
+            attachedMaterials = [...found.materials];
+            renderMaterials();
+          }
         }
       }
     };
@@ -1565,6 +1903,10 @@
           document.getElementById('qm-save-summary').value = found.summary || '';
           if (found.lessonDate) document.getElementById('qm-save-date').value = found.lessonDate;
           document.getElementById('qm-save-allow-pdf').checked = found.allowStudentPdf !== false;
+          if (Array.isArray(found.materials)) {
+            attachedMaterials = [...found.materials];
+            renderMaterials();
+          }
         }
       }
     };
@@ -1578,6 +1920,17 @@
       const title = (document.getElementById('qm-save-title').value || '').trim();
       const summary = (document.getElementById('qm-save-summary').value || '').trim();
       const allowStudentPdf = document.getElementById('qm-save-allow-pdf').checked;
+
+      // Handle manual video link if provided
+      let finalVideo = currentVideo;
+      const manualVidInput = document.getElementById('qm-save-manual-video');
+      if (manualVidInput && manualVidInput.value.trim() && !finalVideo) {
+        finalVideo = {
+          title: title,
+          tmeUrl: manualVidInput.value.trim(),
+          recordedAt: new Date().toISOString()
+        };
+      }
 
       if (!selectedClassId) {
         alert('Vui lòng chọn Lớp học!');
@@ -1603,6 +1956,10 @@
         const noteId = existingLesson?.noteId || ('note_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
         const nextVersion = isUpdate ? ((Number(existingLesson?.version) || 1) + 1) : 1;
 
+        if (finalVideo && rawDoc && !rawDoc.telegramVideo) {
+          rawDoc.telegramVideo = finalVideo;
+        }
+
         const { lessonPayload, nrnByteLength } = await executeSaveLessonToCloud({
           selectedClassId,
           selectedClassName: selectedClassObj?.name || '',
@@ -1616,6 +1973,8 @@
           allowStudentPdf,
           existingCreatedAt: existingLesson?.createdAt,
           existingCoverUrl: existingLesson?.coverUrl,
+          attachedMaterials,
+          existingLesson: existingLesson ? { ...existingLesson, video: finalVideo || existingLesson.video } : (finalVideo ? { video: finalVideo } : null),
           onProgress: (msg) => { progTxt.textContent = msg; }
         });
 
@@ -1633,7 +1992,7 @@
   }
 
   // =========================================================
-  // 11. OPEN SAVED LESSON MODAL (FOR TEACHER)
+  // 12. SCIENTIFIC CLASSROOM & LESSON HUB (DASHBOARD QUẢN LÝ BÀI HỌC)
   // =========================================================
   async function openLoadFromClassModal() {
     let existing = document.getElementById('qmath-open-lesson-modal');
@@ -1641,75 +2000,358 @@
 
     const modal = document.createElement('div');
     modal.id = 'qmath-open-lesson-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,sans-serif;';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.8);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,sans-serif;';
     modal.innerHTML = `
-      <div style="background:#fff;max-width:600px;width:100%;border-radius:20px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);overflow:hidden;">
-        <div style="background:#0f172a;padding:16px 22px;color:#fff;display:flex;align-items:center;justify-content:space-between;">
-          <h3 style="margin:0;font-size:16px;font-weight:800;">📂 Mở Bài Giảng Đã Lưu Từ Lớp Học</h3>
-          <button id="qm-open-close" style="background:rgba(255,255,255,0.15);border:none;color:#fff;width:30px;height:30px;border-radius:8px;cursor:pointer;">✕</button>
-        </div>
-        <div style="padding:18px 22px;">
-          <select id="qm-open-class-filter" style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:13px;margin-bottom:12px;">
-            <option value="ALL">Tất cả lớp học</option>
-          </select>
-          <div id="qm-open-lessons-list" style="max-height:380px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
-            <div style="text-align:center;padding:30px;color:#64748b;font-size:13px;">Đang tải danh sách bài giảng...</div>
+      <div style="background:#fff;max-width:880px;width:100%;border-radius:24px;box-shadow:0 30px 70px rgba(0,0,0,0.4);overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">
+        <!-- HEADER -->
+        <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:18px 26px;color:#fff;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;font-size:20px;">
+              📚
+            </div>
+            <div>
+              <h3 style="margin:0;font-size:17px;font-weight:800;letter-spacing:-0.2px;">Quản Lý Lớp Học & Bài Giảng Khoa Học</h3>
+              <p style="margin:2px 0 0;font-size:12px;color:#94a3b8;">Đồng bộ 1:1 Ghi chép bảng • Video bài giảng • Học liệu & Tái sử dụng</p>
+            </div>
           </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button id="qm-btn-new-lesson-from-hub" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);border:none;color:#fff;padding:8px 14px;border-radius:10px;cursor:pointer;font-weight:700;font-size:12.5px;display:flex;align-items:center;gap:6px;box-shadow:0 4px 12px rgba(37,99,235,0.3);">
+              <span>➕</span> Soạn bài mới
+            </button>
+            <button id="qm-open-close" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700;">✕</button>
+          </div>
+        </div>
+
+        <!-- FILTER & SEARCH BAR -->
+        <div style="padding:16px 26px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:grid;grid-template-columns:220px 200px 1fr;gap:12px;align-items:center;">
+          <div>
+            <label style="font-size:11px;font-weight:800;color:#64748b;display:block;margin-bottom:4px;text-transform:uppercase;">Lớp học</label>
+            <select id="qm-open-class-filter" style="width:100%;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:13px;background:#fff;outline:none;">
+              <option value="ALL">Tất cả lớp học</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:800;color:#64748b;display:block;margin-bottom:4px;text-transform:uppercase;">Chuyên đề</label>
+            <select id="qm-open-chapter-filter" style="width:100%;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:600;font-size:13px;background:#fff;outline:none;">
+              <option value="ALL">Tất cả chuyên đề</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:800;color:#64748b;display:block;margin-bottom:4px;text-transform:uppercase;">Tìm kiếm bài giảng</label>
+            <input id="qm-open-search" type="text" placeholder="Tìm theo tên bài học, dặn dò..." style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:13px;background:#fff;outline:none;" />
+          </div>
+        </div>
+
+        <!-- STATS BAR -->
+        <div style="padding:8px 26px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;font-size:12px;font-weight:700;color:#475569;display:flex;align-items:center;justify-content:space-between;">
+          <span id="qm-open-stats-text">Đang tải dữ liệu...</span>
+          <span style="font-size:11px;color:#64748b;font-weight:600;">(Học sinh và giáo viên mở xem trực tiếp mọi lúc mọi nơi)</span>
+        </div>
+
+        <!-- LESSONS CARDS LIST -->
+        <div id="qm-open-lessons-list" style="padding:18px 26px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;flex:1;background:#f8fafc;">
+          <div style="text-align:center;padding:40px;color:#64748b;font-size:13px;">Đang tải danh sách bài giảng...</div>
         </div>
       </div>
     `;
     document.body.appendChild(modal);
     document.getElementById('qm-open-close').onclick = () => modal.remove();
 
+    document.getElementById('qm-btn-new-lesson-from-hub').onclick = () => {
+      if (confirm('Bắt đầu soạn bài giảng mới trên bảng trắng?')) {
+        modal.remove();
+        currentLoadedLesson = null;
+        activeContext.lessonId = '';
+        if (window.__NR_EDITOR && typeof window.__NR_EDITOR.clear === 'function') {
+          window.__NR_EDITOR.clear();
+        }
+        document.title = 'NoteRenderer - QMath';
+        updateSaveStatusBadge();
+        showToast('✨ Đã mở bảng trắng để soạn bài giảng mới!', 'success');
+      }
+    };
+
     try {
       const [clsRows, confRows] = await Promise.all([
-        sbSelect('classes', 'select=id,name,raw_data'),
+        sbSelect('classes', 'select=id,name,raw_data&order=created_at.desc'),
         sbSelect('configurations', 'select=id,raw_data&id=like.lesson_*')
       ]);
       const clsMap = {};
-      (clsRows || []).forEach(c => { clsMap[c.id] = c.name || c.raw_data?.name || 'Lớp học'; });
+      const classesList = Array.isArray(clsRows) ? clsRows.map(c => {
+        const name = c.name || c.raw_data?.name || 'Lớp học';
+        clsMap[c.id] = name;
+        return { id: c.id, name };
+      }) : [];
 
-      const lessons = (confRows || [])
+      const rawLessons = (confRows || [])
         .map(r => ({ id: r.raw_data?.id || r.id.replace(/^lesson_/, ''), ...(r.raw_data || {}) }))
         .filter(l => l.r2Key)
         .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
 
-      const filterEl = document.getElementById('qm-open-class-filter');
-      filterEl.innerHTML = '<option value="ALL">Tất cả lớp học</option>' +
-        Object.entries(clsMap).map(([cid, cname]) => `<option value="${cid}" ${cid === activeContext.classId ? 'selected' : ''}>${cname}</option>`).join('');
+      const filterCls = document.getElementById('qm-open-class-filter');
+      filterCls.innerHTML = '<option value="ALL">Tất cả lớp học (' + rawLessons.length + ' bài)</option>' +
+        Object.entries(clsMap).map(([cid, cname]) => {
+          const count = rawLessons.filter(l => l.classId === cid).length;
+          return `<option value="${cid}" ${cid === activeContext.classId ? 'selected' : ''}>${cname} (${count} bài)</option>`;
+        }).join('');
 
+      // Populate Chapters filter
+      const filterChap = document.getElementById('qm-open-chapter-filter');
+      const searchInput = document.getElementById('qm-open-search');
+      const statsEl = document.getElementById('qm-open-stats-text');
       const listEl = document.getElementById('qm-open-lessons-list');
+
+      const updateChapters = (currentClassId) => {
+        const pool = currentClassId === 'ALL' ? rawLessons : rawLessons.filter(l => l.classId === currentClassId);
+        const chaps = Array.from(new Set(pool.map(l => l.chapter).filter(Boolean)));
+        filterChap.innerHTML = '<option value="ALL">Tất cả chuyên đề (' + chaps.length + ')</option>' +
+          chaps.map(ch => `<option value="${ch}">${ch}</option>`).join('');
+      };
+      updateChapters(filterCls.value);
+
       const renderList = () => {
-        const cid = filterEl.value;
-        const filtered = cid === 'ALL' ? lessons : lessons.filter(l => l.classId === cid);
+        const cid = filterCls.value;
+        const chap = filterChap.value;
+        const query = (searchInput.value || '').trim().toLowerCase();
+
+        let filtered = rawLessons;
+        if (cid !== 'ALL') filtered = filtered.filter(l => l.classId === cid);
+        if (chap !== 'ALL') filtered = filtered.filter(l => l.chapter === chap);
+        if (query) {
+          filtered = filtered.filter(l =>
+            (l.title && l.title.toLowerCase().includes(query)) ||
+            (l.chapter && l.chapter.toLowerCase().includes(query)) ||
+            (l.summary && l.summary.toLowerCase().includes(query))
+          );
+        }
+
+        const videoCount = filtered.filter(l => l.video).length;
+        const matCount = filtered.reduce((acc, l) => acc + (Array.isArray(l.materials) ? l.materials.length : 0), 0);
+        statsEl.textContent = `📊 Hiển thị: ${filtered.length} bài giảng • ${videoCount} có video ghi hình • ${matCount} file học liệu đính kèm`;
+
         if (filtered.length === 0) {
-          listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#94a3b8;font-size:13px;">Chưa có bài giảng nào đã lưu trong lớp này.</div>';
+          listEl.innerHTML = `
+            <div style="text-align:center;padding:50px 20px;color:#94a3b8;font-size:13.5px;">
+              <span style="font-size:32px;display:block;margin-bottom:8px;">🔍</span>
+              Không tìm thấy bài giảng nào phù hợp với bộ lọc hiện tại.
+            </div>
+          `;
           return;
         }
-        listEl.innerHTML = filtered.map(l => `
-          <div data-lid="${l.id}" style="padding:12px 14px;border:1.5px solid #e2e8f0;border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='#3b82f6';this.style.background='#f8fafc'" onmouseout="this.style.borderColor='#e2e8f0';this.style.background='#fff'">
-            <div>
-              <div style="font-size:11px;font-weight:700;color:#2563eb;">${clsMap[l.classId] || l.className || 'Lớp học'} • ${l.chapter || 'Chuyên đề'}</div>
-              <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${l.title}</div>
-              <div style="font-size:11px;color:#64748b;margin-top:2px;">📄 ${l.pageCount || 1} trang • Phiên bản v${l.version || 1} • Ngày ${l.lessonDate || ''}</div>
-            </div>
-            <button style="padding:8px 14px;border-radius:8px;border:none;background:#eff6ff;color:#1d4ed8;font-weight:800;font-size:12px;cursor:pointer;flex-shrink:0;">
-              Mở bài giảng
-            </button>
-          </div>
-        `).join('');
 
-        listEl.querySelectorAll('[data-lid]').forEach(row => {
-          row.onclick = async () => {
-            const lid = row.getAttribute('data-lid');
+        listEl.innerHTML = filtered.map((l, idx) => {
+          const hasVideo = !!l.video;
+          const materials = Array.isArray(l.materials) ? l.materials : [];
+          const kb = ((l.sizeBytes || 0) / 1024).toFixed(0);
+          const className = clsMap[l.classId] || l.className || 'Lớp học';
+
+          return `
+            <div data-lid="${l.id}" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:16px 18px;box-shadow:0 2px 6px rgba(0,0,0,0.03);transition:all 0.2s;" onmouseover="this.style.borderColor='#3b82f6';this.style.boxShadow='0 8px 20px rgba(59,130,246,0.12)'" onmouseout="this.style.borderColor='#e2e8f0';this.style.boxShadow='0 2px 6px rgba(0,0,0,0.03)'">
+              <!-- TOP META ROW -->
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+                <div>
+                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    <span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:800;">${className}</span>
+                    <span style="background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">${l.chapter || 'Chuyên đề'}</span>
+                    <span style="font-size:11px;color:#64748b;">📅 ${l.lessonDate || 'Hôm nay'}</span>
+                    <span style="font-size:10.5px;color:#94a3b8;">v${l.version || 1}</span>
+                  </div>
+                  <h4 style="margin:6px 0 3px;font-size:15px;font-weight:800;color:#0f172a;line-height:1.35;">${l.title}</h4>
+                  ${l.summary ? `<p style="margin:2px 0 0;font-size:12px;color:#64748b;font-style:italic;">💬 ${l.summary}</p>` : ''}
+                </div>
+
+                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                  <button data-action="open-note" data-lid="${l.id}" style="padding:8px 14px;border-radius:10px;border:none;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-weight:800;font-size:12.5px;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 3px 10px rgba(37,99,235,0.25);">
+                    <span>✏️</span> Mở Bảng Viết
+                  </button>
+                  <button data-action="copy-class" data-lid="${l.id}" title="Sao chép bài giảng này sang Lớp khác" style="padding:8px 11px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#4f46e5;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px;">
+                    <span>🔄</span> Sang lớp...
+                  </button>
+                </div>
+              </div>
+
+              <!-- 3 SCIENTIFIC RESOURCE COLUMNS (1:1 CORRESPONDENCE) -->
+              <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #e2e8f0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:12px;">
+                <!-- 1. GHI CHÉP BẢNG -->
+                <div style="background:#f8fafc;padding:9px 12px;border-radius:10px;border:1px solid #e2e8f0;display:flex;flex-direction:column;justify-content:space-between;gap:6px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-weight:700;color:#0f172a;">📝 Nét vẽ Vector</span>
+                    <span style="font-size:11px;color:#64748b;">${l.pageCount || 1} trang • ${kb} KB</span>
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <button data-action="open-note" data-lid="${l.id}" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e40af;font-size:11px;font-weight:700;cursor:pointer;">
+                      Mở viết
+                    </button>
+                    ${l.allowStudentPdf !== false ? `
+                      <button data-action="export-pdf" data-lid="${l.id}" style="padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;color:#475569;font-size:11px;font-weight:700;cursor:pointer;">
+                        📄 PDF
+                      </button>
+                    ` : ''}
+                  </div>
+                </div>
+
+                <!-- 2. VIDEO BÀI GIẢNG (1:1) -->
+                <div style="background:${hasVideo ? '#f0fdf4' : '#fafafa'};padding:9px 12px;border-radius:10px;border:1px solid ${hasVideo ? '#bbf7d0' : '#e5e7eb'};display:flex;flex-direction:column;justify-content:space-between;gap:6px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-weight:700;color:${hasVideo ? '#15803d' : '#6b7280'};">🎬 Video Bài Giảng</span>
+                    ${hasVideo ? `
+                      <span style="font-size:11px;color:#166534;font-weight:700;">${formatDuration(l.video.duration)}</span>
+                    ` : `
+                      <span style="font-size:11px;color:#9ca3af;">Chưa có</span>
+                    `}
+                  </div>
+                  <div>
+                    ${hasVideo ? `
+                      <button data-action="play-video" data-lid="${l.id}" style="width:100%;padding:4px 8px;border-radius:6px;border:none;background:#16a34a;color:#fff;font-size:11px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
+                        <span>▶</span> Xem Video
+                      </button>
+                    ` : `
+                      <button data-action="attach-video" data-lid="${l.id}" style="width:100%;padding:4px 8px;border-radius:6px;border:1px dashed #cbd5e1;background:#fff;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;">
+                        + Gắn video
+                      </button>
+                    `}
+                  </div>
+                </div>
+
+                <!-- 3. HỌC LIỆU ĐÍNH KÈM -->
+                <div style="background:#f8fafc;padding:9px 12px;border-radius:10px;border:1px solid #e2e8f0;display:flex;flex-direction:column;justify-content:space-between;gap:6px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-weight:700;color:#0f172a;">📎 Học Liệu (${materials.length})</span>
+                    <label style="color:#2563eb;font-size:11px;font-weight:800;cursor:pointer;">
+                      + Thêm
+                      <input type="file" data-action="upload-material" data-lid="${l.id}" multiple style="display:none;" />
+                    </label>
+                  </div>
+                  <div style="display:flex;gap:4px;flex-wrap:wrap;max-height:42px;overflow-y:auto;">
+                    ${materials.length === 0 ? `
+                      <span style="color:#94a3b8;font-size:11px;">Chưa có tài liệu</span>
+                    ` : materials.map(m => `
+                      <a href="${m.url}" target="_blank" download="${m.name}" title="${m.name} (${(m.size/1024).toFixed(0)} KB)" style="background:#fff;border:1px solid #cbd5e1;padding:2px 6px;border-radius:4px;color:#1e40af;text-decoration:none;font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;gap:3px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                        📄 ${m.name}
+                      </a>
+                    `).join('')}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        // Wire click handlers
+        // Open Note
+        listEl.querySelectorAll('[data-action="open-note"]').forEach(b => {
+          b.onclick = async () => {
+            const lid = b.getAttribute('data-lid');
             modal.remove();
             activeContext.viewMode = false;
             await loadAndRenderLessonNote(lid);
           };
         });
+
+        // Play Video
+        listEl.querySelectorAll('[data-action="play-video"]').forEach(b => {
+          b.onclick = () => {
+            const lid = b.getAttribute('data-lid');
+            const target = rawLessons.find(x => x.id === lid);
+            if (target && target.video) {
+              openVideoPlayerModal(target.video, target.title);
+            }
+          };
+        });
+
+        // Copy Lesson to Other Classes
+        listEl.querySelectorAll('[data-action="copy-class"]').forEach(b => {
+          b.onclick = () => {
+            const lid = b.getAttribute('data-lid');
+            const target = rawLessons.find(x => x.id === lid);
+            if (target) {
+              openCopyLessonModal(target, classesList, () => {
+                modal.remove();
+                openLoadFromClassModal();
+              });
+            }
+          };
+        });
+
+        // Attach Video manually
+        listEl.querySelectorAll('[data-action="attach-video"]').forEach(b => {
+          b.onclick = async () => {
+            const lid = b.getAttribute('data-lid');
+            const target = rawLessons.find(x => x.id === lid);
+            if (!target) return;
+            const link = prompt(`Nhập link video Kho lưu trữ hoặc link xem trực tuyến cho bài "${target.title}":`, target.video?.tmeUrl || '');
+            if (link && link.trim()) {
+              target.video = {
+                title: target.title,
+                tmeUrl: link.trim(),
+                recordedAt: new Date().toISOString()
+              };
+              await sbUpsertConfig(`lesson_${target.id}`, target);
+              showToast('✅ Đã gắn video vào bài giảng thành công!', 'success');
+              renderList();
+            }
+          };
+        });
+
+        // Upload Material directly to lesson card
+        listEl.querySelectorAll('[data-action="upload-material"]').forEach(inp => {
+          inp.onchange = async () => {
+            const lid = inp.getAttribute('data-lid');
+            const target = rawLessons.find(x => x.id === lid);
+            if (!target) return;
+            const files = Array.from(inp.files || []);
+            if (files.length === 0) return;
+
+            showToast(`⏳ Đang tải ${files.length} file học liệu lên đám mây...`, 'info');
+            try {
+              const teacherId = (currentUser?.uid || currentUser?.id || 'teacher').replace(/[^a-zA-Z0-9_-]/g, '_');
+              const noteId = target.noteId || ('note_' + Date.now().toString(36));
+              if (!Array.isArray(target.materials)) target.materials = [];
+
+              for (const f of files) {
+                const cleanName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                const r2Key = `notes/${teacherId}/${noteId}/materials/${cleanName}`;
+                const fileUrl = await uploadBlobToR2(r2Key, f, false);
+                target.materials.push({
+                  name: f.name,
+                  size: f.size,
+                  type: f.type || 'application/octet-stream',
+                  url: fileUrl,
+                  uploadedAt: new Date().toISOString()
+                });
+              }
+
+              await sbUpsertConfig(`lesson_${target.id}`, target);
+              showToast(`✅ Đã đính kèm ${files.length} file học liệu vào bài giảng!`, 'success');
+              renderList();
+            } catch (err) {
+              alert('Lỗi tải file học liệu: ' + err.message);
+            }
+          };
+        });
+
+        // Export PDF
+        listEl.querySelectorAll('[data-action="export-pdf"]').forEach(b => {
+          b.onclick = async () => {
+            const lid = b.getAttribute('data-lid');
+            showToast('⏳ Đang chuẩn bị tệp PDF...', 'info');
+            try {
+              modal.remove();
+              await loadAndRenderLessonNote(lid);
+              await exportCurrentNoteToPdf();
+            } catch (err) {
+              alert('Lỗi xuất PDF: ' + err.message);
+            }
+          };
+        });
       };
 
-      filterEl.onchange = renderList;
+      filterCls.onchange = () => {
+        updateChapters(filterCls.value);
+        renderList();
+      };
+      filterChap.onchange = renderList;
+      searchInput.oninput = renderList;
       renderList();
     } catch (e) {
       alert('Lỗi tải danh sách bài giảng: ' + e.message);
@@ -1717,34 +2359,78 @@
   }
 
   // =========================================================
-  // 12. UI BARS FOR TEACHER & STUDENT VIEWER
+  // 13. UI BARS FOR TEACHER & STUDENT VIEWER (WITH VIDEO & MATERIALS)
   // =========================================================
   function renderViewerBottomToolbar(lesson) {
     let vBar = document.getElementById('qmath-viewer-bottom-bar');
     if (vBar) vBar.remove();
 
     const canExportPdf = (userRole === 'teacher') || (lesson?.allowStudentPdf !== false);
+    const hasVideo = !!lesson?.video;
+    const materials = Array.isArray(lesson?.materials) ? lesson.materials : [];
+
     vBar = document.createElement('div');
     vBar.id = 'qmath-viewer-bottom-bar';
-    vBar.style.cssText = 'position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(15,23,42,0.92);backdrop-filter:blur(8px);color:#fff;padding:8px 16px;border-radius:999px;display:flex;align-items:center;gap:12px;box-shadow:0 12px 30px rgba(0,0,0,0.3);font-family:system-ui,sans-serif;font-size:12.5px;';
+    vBar.style.cssText = 'position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(15,23,42,0.94);backdrop-filter:blur(10px);color:#fff;padding:8px 18px;border-radius:999px;display:flex;align-items:center;gap:10px;box-shadow:0 14px 35px rgba(0,0,0,0.4);font-family:system-ui,sans-serif;font-size:12.5px;border:1px solid rgba(255,255,255,0.12);max-width:92vw;flex-wrap:wrap;justify-content:center;';
+    
     vBar.innerHTML = `
-      <span style="font-weight:800;color:#38bdf8;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+      <span style="font-weight:800;color:#38bdf8;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
         📒 ${lesson?.title || 'Bài giảng QMath'}
       </span>
-      <span style="opacity:0.4;">|</span>
-      <span style="font-size:11.5px;color:#cbd5e1;">Chế độ xem bài giảng (${lesson?.pageCount || 1} trang)</span>
+      <span style="opacity:0.3;">|</span>
+      <span style="font-size:11.5px;color:#cbd5e1;">${lesson?.pageCount || 1} trang</span>
+
+      ${hasVideo ? `
+        <button id="qmath-viewer-video-btn" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;padding:6px 13px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(22,163,74,0.35);">
+          <span>▶</span> Xem Video Bài Giảng
+        </button>
+      ` : ''}
+
+      ${materials.length > 0 ? `
+        <div style="position:relative;display:inline-block;">
+          <button id="qmath-viewer-mat-btn" style="background:rgba(255,255,255,0.12);color:#fff;border:none;padding:6px 12px;border-radius:999px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;">
+            <span>📎</span> Học liệu (${materials.length}) ▾
+          </button>
+          <div id="qmath-viewer-mat-dropdown" style="display:none;position:absolute;bottom:calc(100% + 8px);left:0;background:#1e293b;border:1px solid rgba(255,255,255,0.15);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.4);padding:8px;min-width:220px;max-width:320px;max-height:200px;overflow-y:auto;flex-direction:column;gap:5px;z-index:99999;">
+            ${materials.map(m => `
+              <a href="${m.url}" target="_blank" download="${m.name}" style="padding:6px 10px;border-radius:6px;background:rgba(255,255,255,0.06);color:#93c5fd;text-decoration:none;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                <span>📄</span> ${m.name} (${(m.size/1024).toFixed(0)} KB)
+              </a>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
       ${canExportPdf ? `
-        <button id="qmath-viewer-pdf-btn" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:6px 13px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;">
+        <button id="qmath-viewer-pdf-btn" style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;padding:6px 13px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;">
           <span>📄</span> Xuất PDF
         </button>
       ` : ''}
+
       ${userRole === 'teacher' ? `
-        <button id="qmath-viewer-edit-btn" style="background:#3b82f6;color:#fff;border:none;padding:6px 13px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;">
-          ✏️ Bật công cụ sửa
+        <button id="qmath-viewer-edit-btn" style="background:#2563eb;color:#fff;border:none;padding:6px 13px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;">
+          ✏️ Bật sửa bài
         </button>
       ` : ''}
     `;
     document.body.appendChild(vBar);
+
+    if (hasVideo) {
+      const vidBtn = document.getElementById('qmath-viewer-video-btn');
+      if (vidBtn) vidBtn.onclick = () => openVideoPlayerModal(lesson.video, lesson.title);
+    }
+
+    if (materials.length > 0) {
+      const matBtn = document.getElementById('qmath-viewer-mat-btn');
+      const matDd = document.getElementById('qmath-viewer-mat-dropdown');
+      if (matBtn && matDd) {
+        matBtn.onclick = (e) => {
+          e.stopPropagation();
+          matDd.style.display = matDd.style.display === 'flex' ? 'none' : 'flex';
+        };
+        document.addEventListener('click', () => { matDd.style.display = 'none'; }, { once: true });
+      }
+    }
 
     const pdfBtn = document.getElementById('qmath-viewer-pdf-btn');
     if (pdfBtn) pdfBtn.onclick = exportCurrentNoteToPdf;
