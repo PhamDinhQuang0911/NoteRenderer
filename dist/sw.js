@@ -1,4 +1,4 @@
-const CACHE_NAME = 'noterenderer-pwa-v063-merged-v2';
+const CACHE_NAME = 'noterenderer-pwa-v063-merged-v3';
 const PRECACHE_ASSETS = [
   './favicon.png',
   './manifest.webmanifest'
