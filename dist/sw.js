@@ -1,4 +1,4 @@
-const CACHE_NAME = 'noterenderer-pwa-v062-merged-v41';
+const CACHE_NAME = 'noterenderer-pwa-v062-merged-v42';
 const PRECACHE_ASSETS = [
   './favicon.png',
   './manifest.webmanifest'
@@ -21,14 +21,29 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-  // Network first for HTML, JS and CSS to guarantee fresh code
-  if (e.request.mode === 'navigate' || e.request.url.includes('.html') || e.request.url.includes('.js') || e.request.url.includes('.css')) {
+  const url = new URL(e.request.url);
+
+  // For navigation requests (e.g. ?classId=...), network first, fallback to root/index.html
+  if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match(e.request))
+      fetch(e.request).catch(async () => {
+        return (await caches.match('./index.html')) || (await caches.match('./')) || new Response('Offline', { status: 503 });
+      })
     );
     return;
   }
+
+  // Network first for JS and CSS to guarantee fresh code
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
+    e.respondWith(
+      fetch(e.request).catch(async () => {
+        return (await caches.match(e.request)) || new Response('', { status: 404 });
+      })
+    );
+    return;
+  }
+
   e.respondWith(
-    caches.match(e.request).then((res) => res || fetch(e.request))
+    caches.match(e.request).then((res) => res || fetch(e.request).catch(() => new Response('', { status: 404 })))
   );
 });
