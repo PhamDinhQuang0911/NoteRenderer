@@ -1,6 +1,15 @@
 const path = require("path");
 const fs = require("fs");
 const { app, BrowserWindow, ipcMain, clipboard, shell, dialog } = require("electron");
+
+try {
+  app.commandLine.appendSwitch("disable-gpu-sandbox");
+  app.commandLine.appendSwitch("disable-web-security");
+  app.commandLine.appendSwitch("allow-running-insecure-content");
+  app.commandLine.appendSwitch("ignore-gpu-blocklist");
+  app.commandLine.appendSwitch("enable-gpu-rasterization");
+  app.commandLine.appendSwitch("enable-zero-copy");
+} catch (e) {}
 const { renderFormula } = require("./formula.cjs");
 const {
   sanitizeName,
