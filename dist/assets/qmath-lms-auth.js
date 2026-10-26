@@ -1446,22 +1446,22 @@
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
   }
 
-  function openVideoPlayerModal(video, lessonTitle) {
+  async function openVideoPlayerModal(video, lessonTitle) {
     if (!video) return;
     let old = document.getElementById('qmath-video-player-modal');
     if (old) old.remove();
 
     const modal = document.createElement('div');
     modal.id = 'qmath-video-player-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(15,23,42,0.85);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,sans-serif;';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(15,23,42,0.88);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,sans-serif;';
     
-    const streamUrl = video.streamUrl || video.url || '';
+    let streamUrl = video.streamUrl || video.url || '';
     const tmeUrl = video.tmeUrl || '';
     const title = lessonTitle || video.title || 'Video Bài Giảng';
     const mb = video.size ? (video.size / (1024 * 1024)).toFixed(1) : (video.sizeBytes ? (video.sizeBytes / (1024 * 1024)).toFixed(1) : '');
 
     modal.innerHTML = `
-      <div style="background:#0f172a;max-width:820px;width:100%;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.12);overflow:hidden;color:#fff;">
+      <div style="background:#0f172a;max-width:860px;width:100%;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.12);overflow:hidden;color:#fff;">
         <div style="padding:16px 22px;background:#1e293b;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);">
           <div style="display:flex;align-items:center;gap:10px;">
             <span style="font-size:20px;">🎬</span>
@@ -1469,7 +1469,7 @@
               <h3 style="margin:0;font-size:16px;font-weight:800;color:#f8fafc;">${title}</h3>
               <p style="margin:2px 0 0;font-size:11.5px;color:#94a3b8;">
                 ${video.duration ? '⏱️ ' + formatDuration(video.duration) : ''}
-                ${mb ? ' • 📦 ' + mb + ' MB' : ''} • Lưu trữ Đám mây
+                ${mb ? ' • 📦 ' + mb + ' MB' : ''} • Phát trực tiếp trên Web
               </p>
             </div>
           </div>
@@ -1477,21 +1477,14 @@
         </div>
 
         <div style="padding:18px 22px;background:#090d16;">
-          ${streamUrl ? `
-            <div style="position:relative;border-radius:12px;overflow:hidden;background:#000;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
-              <video id="qm-video-el" src="${streamUrl}" controls playsinline autoplay style="width:100%;max-height:65vh;display:block;outline:none;"></video>
+          <div id="qm-vp-screen-wrap" style="position:relative;border-radius:12px;overflow:hidden;background:#000;box-shadow:0 10px 25px rgba(0,0,0,0.5);min-height:260px;display:flex;align-items:center;justify-content:center;">
+            <div id="qm-vp-loading" style="display:${streamUrl ? 'none' : 'flex'};flex-direction:column;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;font-weight:600;">
+              <span style="font-size:24px;margin-bottom:8px;">⏳</span>
+              <span>Đang kết nối luồng phát video trực tiếp...</span>
             </div>
-          ` : `
-            <div style="text-align:center;padding:40px 20px;background:#1e293b;border-radius:14px;border:1px dashed rgba(255,255,255,0.2);">
-              <p style="font-size:15px;font-weight:700;margin-bottom:8px;color:#f8fafc;">Video đã được lưu an toàn trong Kho Lưu Trữ Đám Mây</p>
-              <p style="font-size:12.5px;color:#94a3b8;margin-bottom:18px;">Bạn có thể mở xem trực tiếp trong Kho lưu trữ với chất lượng tối đa:</p>
-              ${tmeUrl ? `
-                <a href="${tmeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;font-weight:800;font-size:13.5px;box-shadow:0 4px 14px rgba(37,99,235,0.4);">
-                  <span>☁️</span> Mở xem trong Kho Lưu Trữ ↗
-                </a>
-              ` : ''}
-            </div>
-          `}
+            <video id="qm-video-el" src="${streamUrl}" controls playsinline autoplay style="width:100%;max-height:65vh;display:${streamUrl ? 'block' : 'none'};outline:none;"></video>
+            <iframe id="qm-iframe-el" style="width:100%;height:65vh;border:none;display:none;" allow="autoplay; fullscreen"></iframe>
+          </div>
 
           <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
             <div style="display:flex;align-items:center;gap:6px;">
@@ -1513,8 +1506,58 @@
     `;
     document.body.appendChild(modal);
 
-    document.getElementById('qm-vp-close').onclick = () => modal.remove();
+    document.getElementById('qm-vp-close').onclick = () => {
+      const v = document.getElementById('qm-video-el');
+      if (v) { v.pause(); v.src = ''; }
+      modal.remove();
+    };
+
     const vidEl = document.getElementById('qm-video-el');
+    const iframeEl = document.getElementById('qm-iframe-el');
+    const loadingEl = document.getElementById('qm-vp-loading');
+
+    if (!streamUrl && video.fileId) {
+      try {
+        const BOT_TOKEN = '8662985318:AAHIweMUW706XKIXFi-bFisaFoE7hZaMHDo';
+        const res = await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/getFile?file_id=' + encodeURIComponent(video.fileId));
+        const data = await res.json();
+        if (data.ok && data.result && data.result.file_path) {
+          const directStream = 'https://api.telegram.org/file/bot' + BOT_TOKEN + '/' + data.result.file_path;
+          video.streamUrl = directStream;
+          if (loadingEl) loadingEl.style.display = 'none';
+          if (vidEl) {
+            vidEl.src = directStream;
+            vidEl.style.display = 'block';
+            vidEl.play().catch(() => {});
+          }
+        } else if (tmeUrl) {
+          const match = tmeUrl.match(/t\.me\/([^/]+)\/(\d+)/);
+          if (match && iframeEl && vidEl) {
+            if (loadingEl) loadingEl.style.display = 'none';
+            vidEl.style.display = 'none';
+            iframeEl.style.display = 'block';
+            iframeEl.src = 'https://t.me/' + match[1] + '/' + match[2] + '?embed=1';
+          }
+        }
+      } catch(e) {
+        if (tmeUrl && iframeEl && vidEl) {
+          if (loadingEl) loadingEl.style.display = 'none';
+          vidEl.style.display = 'none';
+          iframeEl.style.display = 'block';
+          const match = tmeUrl.match(/t\.me\/([^/]+)\/(\d+)/);
+          if (match) iframeEl.src = 'https://t.me/' + match[1] + '/' + match[2] + '?embed=1';
+        }
+      }
+    } else if (!streamUrl && tmeUrl) {
+      const match = tmeUrl.match(/t\.me\/([^/]+)\/(\d+)/);
+      if (match && iframeEl && vidEl) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        vidEl.style.display = 'none';
+        iframeEl.style.display = 'block';
+        iframeEl.src = 'https://t.me/' + match[1] + '/' + match[2] + '?embed=1';
+      }
+    }
+
     if (vidEl) {
       modal.querySelectorAll('.qm-speed-btn').forEach(b => {
         b.onclick = () => {

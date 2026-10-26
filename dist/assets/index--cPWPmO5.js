@@ -3364,6 +3364,17 @@ const TelegramLectureService = {
 
   uploadVideo({ botToken, chatId, blob, filename, caption, onProgress, signal }) {
     return new Promise((resolve, reject) => {
+      let r2UrlPromise = null;
+      try {
+        const r2Form = new FormData();
+        const r2Key = "vid_" + Date.now().toString(36) + "_" + (filename || "lecture.mp4").replace(/[^a-zA-Z0-9._-]/g, "_");
+        r2Form.append("file", blob, r2Key);
+        r2UrlPromise = fetch("https://upload-helper.phamngockhanh-942001.workers.dev/", { method: "PUT", body: r2Form })
+          .then(r => r.json())
+          .then(j => (j && j.url) ? j.url : null)
+          .catch(() => null);
+      } catch(_) {}
+
       const formData = new FormData();
       formData.append("chat_id", chatId);
       formData.append("video", blob, filename || "bai_giang.mp4");
@@ -3406,16 +3417,20 @@ const TelegramLectureService = {
               tmeUrl = "https://t.me/" + String(chatId).slice(1) + "/" + msgId;
             }
 
-            resolve({
-              ok: !0,
-              fileId,
-              messageId: msgId,
-              chatId: String(msg.chat?.id || chatId),
-              chatUsername: msg.chat?.username || "",
-              tmeUrl,
-              duration: video?.duration,
-              size: video?.file_size || blob.size
-            });
+            (async () => {
+              let r2StreamUrl = r2UrlPromise ? (await r2UrlPromise.catch(() => null)) : null;
+              resolve({
+                ok: !0,
+                fileId,
+                messageId: msgId,
+                chatId: String(msg.chat?.id || chatId),
+                chatUsername: msg.chat?.username || "",
+                tmeUrl,
+                streamUrl: r2StreamUrl || undefined,
+                duration: video?.duration,
+                size: video?.file_size || blob.size
+              });
+            })();
           } else {
             reject(new Error(res.description || "Lỗi tải video lên Kho Lưu Trữ"));
           }
@@ -3650,7 +3665,11 @@ function LectureVideoModal({ doc: d, te: tctrl, onClose: t, onOpenSettings: e, n
                 }) : m.jsxs("div", {
                   className: "lv-no-stream",
                   children: [
-                    m.jsx("p", { children: "Video được lưu an toàn trong Kho Lưu Trữ Đám Mây của bạn." }),
+                    videoData.tmeUrl ? m.jsx("iframe", {
+                      src: videoData.tmeUrl + "?embed=1",
+                      style: { width: "100%", height: "380px", border: "none", borderRadius: "10px" },
+                      allow: "fullscreen; autoplay"
+                    }) : m.jsx("p", { children: "Video được lưu an toàn trong Kho Lưu Trữ Đám Mây." }),
                     videoData.tmeUrl && m.jsxs("a", {
                       href: videoData.tmeUrl,
                       target: "_blank",
