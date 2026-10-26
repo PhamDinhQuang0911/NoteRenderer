@@ -367,6 +367,20 @@
 
     // Cảnh báo trước khi đóng tab / tắt trình duyệt nếu có thay đổi chưa lưu lên Lớp học
     window.addEventListener('beforeunload', (e) => {
+      const isElectronApp = typeof window !== 'undefined' && (
+        !!window.noteRenderer ||
+        (window.location && window.location.protocol === 'file:') ||
+        (navigator.userAgent && navigator.userAgent.toLowerCase().includes('electron'))
+      );
+      if (isElectronApp) {
+        // Trên Desktop Electron: Luôn tự động backup nhanh khi đóng, không chặn e.preventDefault() để nút X đóng mượt mà
+        try {
+          if (window.__NR_EDITOR && window.__NR_EDITOR.doc) {
+            performLocalAutoBackup();
+          }
+        } catch (_) {}
+        return;
+      }
       if (activeContext.viewMode || userRole !== 'teacher') return;
       if (window.__NR_EDITOR && window.__NR_EDITOR.doc) {
         const info = computeDocSignature(window.__NR_EDITOR.doc);
@@ -482,6 +496,9 @@
 
   async function restoreFromBackupRecord(record) {
     await waitForNoteRendererReady();
+    if (!window.__NR_API || typeof window.__NR_API.decode !== 'function') {
+      throw new Error('Ứng dụng đang hoàn tất tải dữ liệu. Vui lòng thử lại sau giây lát hoặc làm mới trang.');
+    }
     const bytes = record.nrnBytes instanceof Uint8Array
       ? record.nrnBytes
       : new Uint8Array(record.nrnBytes);
@@ -1171,6 +1188,9 @@
       const bytes = new Uint8Array(await res.arrayBuffer());
 
       setStatus('Đang giải mã & đồng bộ hình ảnh...');
+      if (!window.__NR_API || typeof window.__NR_API.decode !== 'function') {
+        throw new Error('Hệ thống chưa sẵn sàng giải mã bài giảng. Vui lòng làm mới lại trang.');
+      }
       const decodedDoc = await window.__NR_API.decode(bytes);
       await hydrateDocAssetsFromR2(decodedDoc);
 

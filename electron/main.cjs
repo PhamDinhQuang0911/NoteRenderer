@@ -87,6 +87,7 @@ function createWindow(filePath = null) {
 
   openWindows.add(win);
 
+  win.webContents.on("will-prevent-unload", (e) => { e.preventDefault(); });
   win.on("close", () => {
     saveWindowState(win);
   });

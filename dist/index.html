@@ -20,14 +20,38 @@
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon-180x180.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
 
-    <script type="module" crossorigin src="./assets/index--cPWPmO5.js?v=062v25"></script>
-    <script type="module" crossorigin src="./assets/ai-math-assistant.js"></script>
-    <script type="module" crossorigin src="./assets/qmath-lms-auth.js?v=062v25"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CA_0RsQs.css?v=062v25">
+    <script>
+      // Clear outdated PWA cache and force SW update on client browsers
+      (function() {
+        const CURRENT_VER = 'v36';
+        try {
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              names.forEach(function(name) {
+                if (!name.includes(CURRENT_VER)) {
+                  caches.delete(name);
+                }
+              });
+            });
+          }
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(reg) {
+                reg.update();
+              });
+            });
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/index--cPWPmO5.js?v=062v36"></script>
+    <script type="module" crossorigin src="./assets/ai-math-assistant.js?v=062v36"></script>
+    <script type="module" crossorigin src="./assets/qmath-lms-auth.js?v=062v36"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CA_0RsQs.css?v=062v36">
     <script>
       if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=062v25').catch(() => {});
+          navigator.serviceWorker.register('./sw.js?v=062v36').catch(() => {});
         });
       }
     </script>

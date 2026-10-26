@@ -3302,7 +3302,7 @@ const TelegramLectureService = {
       if (chatId.toLowerCase().endsWith("_bot") || (meData?.result?.username && chatId.toLowerCase() === "@" + meData.result.username.toLowerCase())) {
         return {
           ok: !1,
-          message: "⚠️ LƯU Ý: [" + chatId + "] là TÊN CỦA CON BOT, KHÔNG PHẢI KÊNH! Bạn hãy tạo Kênh mới (New Channel) trên Telegram, thêm Bot @" + meData.result.username + " vào Kênh làm Quản trị viên (Admin), rồi nhập @tên_kênh vào đây."
+          message: "⚠️ LƯU Ý: [" + chatId + "] là TÊN CỦA BOT, KHÔNG PHẢI KÊNH! Bạn hãy tạo Kênh mới trong Kho Lưu Trữ, thêm Bot @" + meData.result.username + " vào Kênh làm Quản trị viên (Admin), rồi nhập @tên_kênh vào đây."
         };
       }
       const chatRes = await fetch("https://api.telegram.org/bot" + botToken + "/getChat?chat_id=" + encodeURIComponent(chatId));
@@ -3322,7 +3322,7 @@ const TelegramLectureService = {
     } catch (e) {
       const msg = (e.message || e) + "";
       if (msg.includes("Failed to fetch")) {
-        return { ok: !1, message: "Lỗi kết nối tới api.telegram.org (Failed to fetch). Nếu bạn đang dùng bản Web trên trình duyệt Chrome, vui lòng mở bản ứng dụng Desktop NoteRenderer.exe để không bị giới hạn bảo mật CORS của trình duyệt, hoặc kiểm tra kết nối Internet/VPN." };
+        return { ok: !1, message: "Lỗi kết nối tới Kho Lưu Trữ. Nếu bạn đang dùng bản Web trên trình duyệt Chrome, vui lòng mở bản ứng dụng Desktop NoteRenderer.exe để không bị giới hạn bảo mật CORS của trình duyệt, hoặc kiểm tra kết nối Internet/VPN." };
       }
       return { ok: !1, message: "Lỗi mạng hoặc kết nối: " + msg };
     }
@@ -3397,14 +3397,14 @@ const TelegramLectureService = {
               size: video?.file_size || blob.size
             });
           } else {
-            reject(new Error(res.description || "Lỗi tải video lên Telegram"));
+            reject(new Error(res.description || "Lỗi tải video lên Kho Lưu Trữ"));
           }
         } catch (err) {
           reject(err);
         }
       };
 
-      xhr.onerror = () => reject(new Error("Lỗi mạng khi tải lên Telegram (kiểm tra file > 50MB hoặc mất kết nối)"));
+      xhr.onerror = () => reject(new Error("Lỗi mạng khi tải lên Kho Lưu Trữ (kiểm tra file > 50MB hoặc mất kết nối)"));
       xhr.send(formData);
     });
   }
@@ -3680,7 +3680,7 @@ function LectureVideoModal({ doc: d, te: tctrl, onClose: t, onOpenSettings: e, n
           children: [
             m.jsx("div", { className: "lv-empty-icon", children: "📹" }),
             m.jsx("h4", { children: "Chưa có video ghi hình cho bài giảng này" }),
-            m.jsx("p", { children: "Bạn có thể quay màn hình bài giảng (sẽ tự động tải lên Telegram) hoặc dán link video Telegram có sẵn vào bên dưới:" }),
+            m.jsx("p", { children: "Bạn có thể quay màn hình bài giảng (sẽ tự động tải lên Kho Lưu Trữ) hoặc dán link video kho lưu trữ có sẵn vào bên dưới:" }),
             m.jsxs("div", {
               className: "lv-manual-input",
               children: [
