@@ -1482,7 +1482,7 @@
               <span style="font-size:24px;margin-bottom:8px;">⏳</span>
               <span>Đang kết nối luồng phát video trực tiếp...</span>
             </div>
-            <video id="qm-video-el" src="${streamUrl}" controls playsinline autoplay style="width:100%;max-height:65vh;display:${streamUrl ? 'block' : 'none'};outline:none;"></video>
+            <video id="qm-video-el" src="${streamUrl}" controls controlslist="nodownload" playsinline autoplay style="width:100%;max-height:65vh;display:${streamUrl ? 'block' : 'none'};outline:none;"></video>
             <iframe id="qm-iframe-el" style="width:100%;height:65vh;border:none;display:none;" allow="autoplay; fullscreen"></iframe>
           </div>
 
@@ -1509,6 +1509,8 @@
     document.getElementById('qm-vp-close').onclick = () => {
       const v = document.getElementById('qm-video-el');
       if (v) { v.pause(); v.src = ''; }
+      if (modal._hls) { modal._hls.destroy(); modal._hls = null; }
+      if (modal._blobUrl) { URL.revokeObjectURL(modal._blobUrl); modal._blobUrl = null; }
       modal.remove();
     };
 
@@ -1516,7 +1518,58 @@
     const iframeEl = document.getElementById('qm-iframe-el');
     const loadingEl = document.getElementById('qm-vp-loading');
 
-    if (!streamUrl && video.fileId) {
+        // 0. Chuẩn HLS (HTTP Live Streaming)
+    if (video.type === 'hls' || video.m3u8 || /\.m3u8(\?.*)?$/i.test(streamUrl)) {
+      (async () => {
+        try {
+          let hlsUrl = streamUrl;
+          if (video.m3u8) {
+            const blob = new Blob([video.m3u8], { type: 'application/vnd.apple.mpegurl' });
+            modal._blobUrl = URL.createObjectURL(blob);
+            hlsUrl = modal._blobUrl;
+          }
+
+          const ensureHls = async () => {
+            if (typeof window.Hls !== 'undefined') return window.Hls;
+            return new Promise((resolve, reject) => {
+              const s = document.createElement('script');
+              s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1';
+              s.onload = () => resolve(window.Hls);
+              s.onerror = reject;
+              document.head.appendChild(s);
+            });
+          };
+
+          const HlsClass = await ensureHls();
+          if (HlsClass && HlsClass.isSupported()) {
+            const hls = new HlsClass({ enableWorker: true, lowLatencyMode: false, backBufferLength: 60 });
+            modal._hls = hls;
+            hls.loadSource(hlsUrl);
+            hls.attachMedia(vidEl);
+            hls.on(HlsClass.Events.MANIFEST_PARSED, () => {
+              if (loadingEl) loadingEl.style.display = 'none';
+              if (vidEl) { vidEl.style.display = 'block'; vidEl.play().catch(() => {}); }
+            });
+            hls.on(HlsClass.Events.ERROR, (e, d) => {
+              if (d.fatal) {
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (d.type === HlsClass.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+                else if (d.type === HlsClass.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+                else hls.destroy();
+              }
+            });
+          } else if (vidEl && vidEl.canPlayType('application/vnd.apple.mpegurl')) {
+            vidEl.src = hlsUrl;
+            if (loadingEl) loadingEl.style.display = 'none';
+            vidEl.style.display = 'block';
+            vidEl.play().catch(() => {});
+          }
+        } catch(err) {
+          console.warn('Lỗi khởi tạo HLS player trong NoteRenderer:', err);
+          if (loadingEl) loadingEl.style.display = 'none';
+        }
+      })();
+    } else if (!streamUrl && video.fileId) {
       try {
         const BOT_TOKEN = '8662985318:AAHIweMUW706XKIXFi-bFisaFoE7hZaMHDo';
         const res = await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/getFile?file_id=' + encodeURIComponent(video.fileId));
