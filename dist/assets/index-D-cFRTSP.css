@@ -815,3 +815,56 @@ body.dark .quicknote-card:hover {
 body.dark .quicknote-card span {
   color: #e2e8f0 !important;
 }
+
+/* Pen Popover Stroke Mode Segmented Toggle */
+.pp-modes-wrap {
+  margin-top: 10px;
+}
+.pp-modes {
+  display: flex !important;
+  gap: 6px !important;
+  margin: 6px 0 2px !important;
+  padding: 3px !important;
+  background: #f1ede9 !important;
+  border-radius: 9px !important;
+  border: 1px solid #e5ded8 !important;
+}
+.pp-modes button {
+  flex: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 6px 10px !important;
+  border: none !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  color: #555 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+.pp-modes button svg {
+  width: 15px !important;
+  height: 15px !important;
+  flex-shrink: 0 !important;
+}
+.pp-modes button:hover:not(.on) {
+  background: rgba(255, 255, 255, 0.6) !important;
+  color: #222 !important;
+}
+.pp-modes button.on {
+  background: #ffffff !important;
+  color: var(--accent, #d32f2f) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1.5px 4px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Suppress native CSS cursor on drawing tools so only GPU DOM overlay is shown */
+html:not(.mobile) .board .board-scroller[data-tool=pen],
+html:not(.mobile) .board .board-scroller[data-tool=highlighter],
+html:not(.mobile) .board .board-scroller[data-tool=scratch],
+html:not(.mobile) .board .board-scroller[data-tool=laser] {
+  cursor: none !important;
+}
