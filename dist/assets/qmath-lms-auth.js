@@ -372,14 +372,18 @@
         (window.location && window.location.protocol === 'file:') ||
         (navigator.userAgent && navigator.userAgent.toLowerCase().includes('electron'))
       );
-      if (isElectronApp) {
-        // Trên Desktop Electron: Luôn tự động backup nhanh khi đóng, không chặn e.preventDefault() để nút X đóng mượt mà
+      if (window.__NR_EDITOR && window.__NR_EDITOR.doc) {
         try {
-          if (window.__NR_EDITOR && window.__NR_EDITOR.doc) {
-            performLocalAutoBackup();
-          }
+          // Luôn thực hiện backup cục bộ tức thì trước khi đóng tab/app để chống mất điện
+          performLocalAutoBackup();
         } catch (_) {}
-        return;
+        const info = computeDocSignature(window.__NR_EDITOR.doc);
+        if (info.hasContent && info.sig !== lastCloudSavedSignature) {
+          const msg = 'Bài giảng có nét vẽ mới chưa được lưu vào Lớp học. Bạn có muốn lưu bài giảng trước khi thoát?';
+          e.preventDefault();
+          e.returnValue = msg;
+          return msg;
+        }
       }
       if (activeContext.viewMode || userRole !== 'teacher') return;
       if (window.__NR_EDITOR && window.__NR_EDITOR.doc) {
@@ -408,6 +412,14 @@
         }
       }
     }, true);
+  }
+
+    // Tự động kiểm tra khôi phục bản nháp khi mở bảng vẽ
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(checkAndOfferAutoRecovery, 1500);
+  });
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(checkAndOfferAutoRecovery, 1500);
   }
 
   async function checkAndOfferAutoRecovery() {

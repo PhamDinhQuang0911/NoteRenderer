@@ -18,7 +18,7 @@
 
     <script>
       (function() {
-        const CURRENT_VER = 'v063v5';
+        const CURRENT_VER = 'v063v6';
         try {
           if ('caches' in window) {
             caches.keys().then(function(names) {
@@ -67,7 +67,8 @@
       document.addEventListener('gesturechange', function(e) { e.preventDefault(); }, { passive: false });
       document.addEventListener('gestureend', function(e) { e.preventDefault(); }, { passive: false });
     </script>
-  </head>
+    <link rel="preload" href="./assets/casio_580_skin.png" as="image">
+</head>
   <body>
     <div id="root"></div>
   </body>
