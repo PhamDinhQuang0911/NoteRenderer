@@ -1440,3 +1440,180 @@ body.dark .rec-quality-select option {
 
 /* Casio LCD Plus symbol fix */
 .lcd-plus{display:inline-block!important;margin:0 .1em!important;font-weight:bold!important;font-size:1.05em!important;line-height:1!important;vertical-align:baseline!important;color:currentColor!important;}
+
+
+/* ===================================================================== */
+/* MODERN FLOATING RECORDING STUDIO DOCK (DARK GLASSMORPHISM)            */
+/* ===================================================================== */
+.rec-bar {
+  position: fixed !important;
+  transform: translateX(-50%) !important;
+  z-index: 1050 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: max-content !important;
+  max-width: calc(100vw - 32px) !important;
+  padding: 6px 14px !important;
+  background: rgba(15, 23, 42, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+  cursor: default !important;
+  color: #f8fafc !important;
+  font-size: 13px !important;
+}
+
+.rec-bar button {
+  height: 32px !important;
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #e2e8f0 !important;
+}
+
+.rec-seg {
+  display: inline-flex !important;
+  padding: 3px !important;
+  gap: 3px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+.rec-seg button {
+  height: 28px !important;
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+  color: #94a3b8 !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+}
+
+.rec-seg button:hover {
+  color: #fff !important;
+}
+
+.rec-seg button.on {
+  background: #2563eb !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.45) !important;
+}
+
+.rec-switch {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  color: #cbd5e1 !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+}
+
+.rec-switch.on {
+  color: #38bdf8 !important;
+}
+
+.rec-track {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+.rec-switch.on .rec-track {
+  background: #2563eb !important;
+}
+
+.rec-quality-select {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 8px !important;
+  color: #f1f5f9 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 4px 8px !important;
+  height: 30px !important;
+  outline: none !important;
+  cursor: pointer !important;
+  max-width: 180px !important;
+}
+
+.rec-quality-select option {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+.rec-sep {
+  background: rgba(255, 255, 255, 0.15) !important;
+  height: 20px !important;
+}
+
+.rec-bar .rec-ghost {
+  color: #94a3b8 !important;
+}
+
+.rec-bar .rec-ghost:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #f8fafc !important;
+}
+
+.rec-bar .rec-start {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+  padding: 0 16px !important;
+  height: 32px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.5) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+.rec-bar .rec-start:hover {
+  background: linear-gradient(135deg, #f87171, #ef4444) !important;
+  transform: translateY(-1px) !important;
+}
+
+.rec-area {
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.25) !important;
+  outline: 2px dashed #ef4444 !important;
+  outline-offset: -2px !important;
+  border: none !important;
+  border-radius: 4px !important;
+}
+
+.rec-handle {
+  width: 14px !important;
+  height: 14px !important;
+  background: #ef4444 !important;
+  border: 2px solid #ffffff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+.rec-bar.live {
+  background: rgba(15, 23, 42, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(239, 68, 68, 0.4) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 15px rgba(239, 68, 68, 0.25) !important;
+  border-radius: 999px !important;
+  padding: 6px 14px !important;
+  color: #fff !important;
+}
+
+.rec-bar.live .rec-stop {
+  background: #ef4444 !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4) !important;
+}
+
+.rec-bar.live .rec-stop:hover {
+  background: #dc2626 !important;
+}
