@@ -1817,6 +1817,10 @@ body.dark .rec-quality-select option {
   font-size: 13.5px !important;
 }
 
+.rec-bar.live > * {
+  flex: none !important;
+}
+
 .rec-bar.live .rec-small {
   width: 28px !important;
   height: 28px !important;
@@ -1825,19 +1829,22 @@ body.dark .rec-quality-select option {
   align-items: center !important;
   justify-content: center !important;
   border-radius: 999px !important;
-  color: #ffffffd0 !important;
-  background: transparent !important;
-  border: none !important;
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
   cursor: pointer !important;
   flex: none !important;
-  transition: background .12s, color .12s !important;
+  margin-left: 2px !important;
+  margin-right: 2px !important;
+  transition: background .12s, color .12s, transform 80ms !important;
 }
 
 .rec-bar.live .rec-small:hover {
   color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.22) !important;
+  background: rgba(255, 255, 255, 0.28) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
 }
 
 .rec-bar.live .rec-small:active {
-  transform: scale(0.92) !important;
+  transform: scale(0.9) !important;
 }

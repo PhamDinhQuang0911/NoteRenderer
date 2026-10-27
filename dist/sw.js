@@ -1,4 +1,4 @@
-const CACHE_NAME = 'noterenderer-pwa-v063-merged-v10';
+const CACHE_NAME = 'noterenderer-pwa-v063-merged-v11';
 const PRECACHE_ASSETS = [
   './favicon.png',
   './manifest.webmanifest'
@@ -26,7 +26,7 @@ self.addEventListener('fetch', (e) => {
   // For navigation requests (e.g. ?classId=...), network first, fallback to root/index.html
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request).catch(async () => {
+      fetch(e.request, { cache: 'no-cache' }).catch(async () => {
         return (await caches.match('./index.html')) || (await caches.match('./')) || new Response('Offline', { status: 503 });
       })
     );

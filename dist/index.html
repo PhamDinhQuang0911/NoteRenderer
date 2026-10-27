@@ -18,35 +18,36 @@
 
     <script>
       (function() {
-        const CURRENT_VER = 'v063v7';
+        const CURRENT_VER = 'v063v11';
         try {
-          if ('caches' in window) {
-            caches.keys().then(function(names) {
-              names.forEach(function(name) {
-                if (!name.includes(CURRENT_VER)) {
+          if (localStorage.getItem('nr_cache_ver') !== CURRENT_VER) {
+            localStorage.setItem('nr_cache_ver', CURRENT_VER);
+            if ('caches' in window) {
+              caches.keys().then(function(names) {
+                names.forEach(function(name) {
                   caches.delete(name);
-                }
+                });
               });
-            });
-          }
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(regs) {
-              regs.forEach(function(reg) {
-                reg.update();
+            }
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function(regs) {
+                regs.forEach(function(reg) {
+                  reg.unregister();
+                });
               });
-            });
+            }
           }
         } catch (e) {}
       })();
     </script>
-    <script type="module" crossorigin src="./assets/index-C4FEyT2h.js?v=063v10"></script>
-    <script type="module" crossorigin src="./assets/ai-math-assistant.js?v=063v10"></script>
-    <script type="module" crossorigin src="./assets/qmath-lms-auth.js?v=063v10"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-Cyl3OjHe.css?v=063v10">
+    <script type="module" crossorigin src="./assets/index-C4FEyT2h.js?v=063v11"></script>
+    <script type="module" crossorigin src="./assets/ai-math-assistant.js?v=063v11"></script>
+    <script type="module" crossorigin src="./assets/qmath-lms-auth.js?v=063v11"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Cyl3OjHe.css?v=063v11">
     <script>
       if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=063v10').catch(() => {});
+          navigator.serviceWorker.register('./sw.js?v=063v11').catch(() => {});
         });
       }
     </script>
