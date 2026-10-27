@@ -1796,19 +1796,48 @@ body.dark .rec-quality-select option {
   flex: none !important;
 }
 
-.rec-bar.live .rec-small {
-  width: 32px !important;
+.rec-bar.live.mini {
+  padding: 4px 10px 4px 12px !important;
+  gap: 8px !important;
   height: 32px !important;
+  border-radius: 999px !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 16px rgba(40, 10, 12, 0.75) !important;
+  background: linear-gradient(180deg, #7d1a1e, #550f13) !important;
+  animation: none !important;
+}
+
+.rec-bar.live.mini:hover {
+  background: linear-gradient(180deg, #8f1e23, #651217) !important;
+  box-shadow: 0 6px 20px rgba(40, 10, 12, 0.9) !important;
+}
+
+.rec-bar.live.mini .rec-time {
+  min-width: 0 !important;
+  font-size: 13.5px !important;
+}
+
+.rec-bar.live .rec-small {
+  width: 28px !important;
+  height: 28px !important;
   padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
   justify-content: center !important;
   border-radius: 999px !important;
-  color: #ffffffb0 !important;
+  color: #ffffffd0 !important;
   background: transparent !important;
   border: none !important;
   cursor: pointer !important;
+  flex: none !important;
+  transition: background .12s, color .12s !important;
 }
 
 .rec-bar.live .rec-small:hover {
-  color: #fff !important;
-  background: rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+}
+
+.rec-bar.live .rec-small:active {
+  transform: scale(0.92) !important;
 }
