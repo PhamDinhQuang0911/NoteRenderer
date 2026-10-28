@@ -18,7 +18,7 @@
 
     <script>
       (function() {
-        const CURRENT_VER = 'v063v11';
+        const CURRENT_VER = 'v063v12';
         try {
           if (localStorage.getItem('nr_cache_ver') !== CURRENT_VER) {
             localStorage.setItem('nr_cache_ver', CURRENT_VER);
@@ -68,7 +68,7 @@
       document.addEventListener('gesturechange', function(e) { e.preventDefault(); }, { passive: false });
       document.addEventListener('gestureend', function(e) { e.preventDefault(); }, { passive: false });
     </script>
-    <link rel="preload" href="./assets/casio_580_skin.png" as="image">
+    <link rel="prefetch" href="./assets/casio_580_skin.png">
 </head>
   <body>
     <div id="root"></div>
