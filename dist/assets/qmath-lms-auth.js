@@ -1207,11 +1207,26 @@
       await hydrateDocAssetsFromR2(decodedDoc);
 
       const docTitle = currentLoadedLesson.title || 'Bài giảng QMath';
-      if (typeof window.__NR_OPEN_DOC === 'function') {
-        window.__NR_OPEN_DOC({ doc: decodedDoc, name: docTitle, ref: null });
-      } else if (window.__NR_EDITOR && typeof window.__NR_EDITOR.load === 'function') {
-        window.__NR_EDITOR.load(decodedDoc);
-      }
+      window.__NR_LOADED_LESSON_DOC = decodedDoc;
+      window.__NR_LOADED_LESSON_TITLE = docTitle;
+
+      const applyLoadedDoc = () => {
+        try {
+          if (typeof window.__NR_OPEN_DOC === 'function') {
+            window.__NR_OPEN_DOC({ doc: decodedDoc, name: docTitle, ref: null });
+          }
+          if (window.__NR_EDITOR && typeof window.__NR_EDITOR.load === 'function') {
+            window.__NR_EDITOR.load(decodedDoc);
+          }
+        } catch (e) {
+          console.warn('[loadAndRenderLessonNote] applyDoc error:', e);
+        }
+      };
+
+      applyLoadedDoc();
+      setTimeout(applyLoadedDoc, 150);
+      setTimeout(applyLoadedDoc, 500);
+      setTimeout(applyLoadedDoc, 1200);
 
       document.title = `${docTitle} - QMath Note`;
 
@@ -1305,6 +1320,7 @@
     existingCoverUrl,
     attachedMaterials,
     existingLesson,
+    selectedPageIndices,
     onProgress
   }) {
     isSavingToCloud = true;
@@ -1312,13 +1328,22 @@
 
     try {
       const rawDoc = window.__NR_EDITOR.doc;
-      const pageCount = Array.isArray(rawDoc.pages) ? rawDoc.pages.length : 1;
+      const totalRawPages = Array.isArray(rawDoc.pages) ? rawDoc.pages.length : 1;
+      const validIndices = Array.isArray(selectedPageIndices) && selectedPageIndices.length > 0
+        ? selectedPageIndices.filter(i => i >= 0 && i < totalRawPages)
+        : Array.from({ length: totalRawPages }, (_, i) => i);
+
+      const docToSave = {
+        ...rawDoc,
+        pages: validIndices.map(idx => rawDoc.pages[idx])
+      };
+      const pageCount = docToSave.pages.length;
       const teacherId = (currentUser?.uid || currentUser?.id || 'teacher').replace(/[^a-zA-Z0-9_-]/g, '_');
 
       if (onProgress) onProgress('Đang tạo ảnh bìa thu nhỏ trang đầu...');
       let coverUrl = existingCoverUrl || '';
       try {
-        const coverDataUrl = await window.__NR_API.renderPageToDataUrl(rawDoc, 0, 0.35, 'image/webp', 0.78, false);
+        const coverDataUrl = await window.__NR_API.renderPageToDataUrl(docToSave, 0, 0.35, 'image/webp', 0.78, false);
         const coverRes = await fetch(coverDataUrl);
         const coverBlob = await coverRes.blob();
         coverUrl = await uploadBlobToR2(`notes/${teacherId}/${noteId}/cover.webp`, coverBlob, false);
@@ -1326,7 +1351,7 @@
         console.warn('[SaveLesson] Cover render warning:', eCov);
       }
 
-      const { cleanDoc, assetsManifest } = await extractAndDeduplicateDocAssets(rawDoc, teacherId, (msg) => {
+      const { cleanDoc, assetsManifest } = await extractAndDeduplicateDocAssets(docToSave, teacherId, (msg) => {
         if (onProgress) onProgress(msg);
       });
 
@@ -1817,6 +1842,26 @@
             <input id="qm-save-title" type="text" placeholder="VD: Buổi 1 - Hằng đẳng thức và Căn bậc hai" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:13.5px;" />
           </div>
 
+          <!-- PHẦN CHỌN TRANG LƯU VÀO LỚP HỌC (CHUẨN XUẤT PDF) -->
+          <div style="margin-bottom:14px;padding:12px;border-radius:12px;border:1.5px solid #e2e8f0;background:#f8fafc;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+              <span style="font-weight:700;color:#0f172a;font-size:12.5px;">
+                📄 Chọn trang lưu vào lớp (<span id="qm-save-pages-count">0</span>):
+              </span>
+              <div style="display:flex;gap:4px;">
+                <button type="button" id="qm-btn-pages-all" style="padding:3px 8px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;font-size:11px;font-weight:700;cursor:pointer;">Tất cả</button>
+                <button type="button" id="qm-btn-pages-odd" style="padding:3px 8px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;font-size:11px;font-weight:700;cursor:pointer;">Trang lẻ</button>
+                <button type="button" id="qm-btn-pages-even" style="padding:3px 8px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;font-size:11px;font-weight:700;cursor:pointer;">Trang chẵn</button>
+                <button type="button" id="qm-btn-pages-none" style="padding:3px 8px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;font-size:11px;font-weight:700;cursor:pointer;">Bỏ chọn</button>
+              </div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <input id="qm-save-pages-input" type="text" placeholder="VD: 1-3, 5, 8" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:12px;font-weight:700;color:#1e293b;" />
+            </div>
+            <div id="qm-save-pages-grid" style="display:flex;flex-wrap:wrap;gap:6px;max-height:130px;overflow-y:auto;padding:6px;border:1px dashed #cbd5e1;border-radius:8px;background:#fff;">
+            </div>
+          </div>
+
           <!-- VIDEO STATUS BOX 1:1 -->
           <div style="margin-bottom:14px;padding:12px;border-radius:12px;border:1.5px solid ${currentVideo ? '#bbf7d0' : '#e2e8f0'};background:${currentVideo ? '#f0fdf4' : '#f8fafc'};">
             <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -1898,6 +1943,109 @@
     document.getElementById('qm-save-close').onclick = () => modal.remove();
     document.getElementById('qm-save-cancel').onclick = () => modal.remove();
     document.getElementById('qm-btn-export-local-pdf').onclick = () => exportCurrentNoteToPdf();
+
+    // PAGE SELECTION LOGIC
+    const totalPages = Array.isArray(rawDoc.pages) ? rawDoc.pages.length : 1;
+    let selectedPagesSet = new Set(Array.from({ length: totalPages }, (_, i) => i));
+
+    function formatPageRange(set) {
+      if (set.size === 0) return '';
+      if (set.size === totalPages) return `1-${totalPages}`;
+      const sorted = Array.from(set).sort((a, b) => a - b);
+      const ranges = [];
+      let start = sorted[0];
+      let end = start;
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i] === end + 1) {
+          end = sorted[i];
+        } else {
+          ranges.push(start === end ? `${start + 1}` : `${start + 1}-${end + 1}`);
+          start = sorted[i];
+          end = start;
+        }
+      }
+      ranges.push(start === end ? `${start + 1}` : `${start + 1}-${end + 1}`);
+      return ranges.join(', ');
+    }
+
+    function parsePageRange(str) {
+      const set = new Set();
+      if (!str || !str.trim()) return set;
+      const parts = str.split(/[,;\s]+/);
+      for (const p of parts) {
+        if (!p) continue;
+        const dashMatch = p.match(/^(\d+)-(\d+)$/);
+        if (dashMatch) {
+          const from = parseInt(dashMatch[1], 10) - 1;
+          const to = parseInt(dashMatch[2], 10) - 1;
+          for (let i = Math.max(0, from); i <= Math.min(totalPages - 1, to); i++) {
+            set.add(i);
+          }
+        } else {
+          const single = parseInt(p, 10) - 1;
+          if (!isNaN(single) && single >= 0 && single < totalPages) {
+            set.add(single);
+          }
+        }
+      }
+      return set;
+    }
+
+    const pagesGridEl = document.getElementById('qm-save-pages-grid');
+    const pagesInputEl = document.getElementById('qm-save-pages-input');
+    const pagesCountBadge = document.getElementById('qm-save-pages-count');
+
+    function renderPagesGrid() {
+      if (!pagesGridEl) return;
+      pagesCountBadge.textContent = `${selectedPagesSet.size}/${totalPages}`;
+      pagesInputEl.value = formatPageRange(selectedPagesSet);
+
+      pagesGridEl.innerHTML = Array.from({ length: totalPages }, (_, i) => {
+        const isSel = selectedPagesSet.has(i);
+        return `
+          <button type="button" data-page-idx="${i}" style="padding:5px 9px;border-radius:8px;border:${isSel ? '1.5px solid #2563eb' : '1px solid #cbd5e1'};background:${isSel ? '#eff6ff' : '#f8fafc'};color:${isSel ? '#1d4ed8' : '#64748b'};font-weight:${isSel ? '800' : '600'};font-size:11.5px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;transition:all 0.12s;">
+            <span>${isSel ? '✓' : '○'}</span>
+            <span>Trang ${i + 1}</span>
+          </button>
+        `;
+      }).join('');
+
+      pagesGridEl.querySelectorAll('[data-page-idx]').forEach(btn => {
+        btn.onclick = () => {
+          const idx = parseInt(btn.getAttribute('data-page-idx'), 10);
+          if (selectedPagesSet.has(idx)) {
+            selectedPagesSet.delete(idx);
+          } else {
+            selectedPagesSet.add(idx);
+          }
+          renderPagesGrid();
+        };
+      });
+    }
+
+    renderPagesGrid();
+
+    pagesInputEl.onchange = () => {
+      selectedPagesSet = parsePageRange(pagesInputEl.value);
+      renderPagesGrid();
+    };
+
+    document.getElementById('qm-btn-pages-all').onclick = () => {
+      selectedPagesSet = new Set(Array.from({ length: totalPages }, (_, i) => i));
+      renderPagesGrid();
+    };
+    document.getElementById('qm-btn-pages-odd').onclick = () => {
+      selectedPagesSet = new Set(Array.from({ length: totalPages }, (_, i) => i).filter(i => i % 2 === 0));
+      renderPagesGrid();
+    };
+    document.getElementById('qm-btn-pages-even').onclick = () => {
+      selectedPagesSet = new Set(Array.from({ length: totalPages }, (_, i) => i).filter(i => i % 2 === 1));
+      renderPagesGrid();
+    };
+    document.getElementById('qm-btn-pages-none').onclick = () => {
+      selectedPagesSet = new Set();
+      renderPagesGrid();
+    };
 
     // Render materials chips list
     const matListEl = document.getElementById('qm-save-materials-list');
@@ -2068,6 +2216,11 @@
         alert('Vui lòng nhập Tên bài giảng!');
         return;
       }
+      if (selectedPagesSet.size === 0) {
+        alert('Vui lòng chọn ít nhất 1 trang để lưu bài giảng!');
+        return;
+      }
+      const selectedPageIndices = Array.from(selectedPagesSet).sort((a, b) => a - b);
 
       const progBox = document.getElementById('qm-save-progress-box');
       const progTxt = document.getElementById('qm-save-progress-text');
@@ -2103,6 +2256,7 @@
           existingCoverUrl: existingLesson?.coverUrl,
           attachedMaterials,
           existingLesson: existingLesson ? { ...existingLesson, video: finalVideo || existingLesson.video } : (finalVideo ? { video: finalVideo } : null),
+          selectedPageIndices,
           onProgress: (msg) => { progTxt.textContent = msg; }
         });
 
