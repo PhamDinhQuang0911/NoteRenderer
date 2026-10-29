@@ -1373,8 +1373,46 @@ body.nr-fullscreen .work {
   height: 100% !important;
   max-height: 100vh !important;
 }
-body.nr-fullscreen .toolbar .tb-title {
+body.nr-fullscreen .toolbar,
+body.nr-fullscreen .toolbar.two-rows {
+  height: 50px !important;
+  min-height: 50px !important;
+  max-height: 50px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  padding: 0 10px !important;
+  background: var(--surface, #ffffff) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  z-index: 100 !important;
+}
+/* Loại bỏ các thanh công cụ ở phần cài đặt (như hình 3) trong chế độ toàn màn hình */
+body.nr-fullscreen .toolbar > .tb-group:first-child,
+body.nr-fullscreen .toolbar .tb-group.actions {
   display: none !important;
+}
+/* Chỉ hiển thị các công cụ viết: bút, màu, tẩy, thước, vẽ hình, bảng màu... */
+body.nr-fullscreen .toolbar .tb-group.tools {
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
+  margin: 0 !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+}
+body.nr-fullscreen .toolbar .tb-group.tools::-webkit-scrollbar {
+  display: none !important;
+}
+/* Hiển thị số trang, nút thu phóng và nút thoát toàn màn hình ở góc phải */
+body.nr-fullscreen .toolbar .tb-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  margin-left: auto !important;
+  flex-shrink: 0 !important;
+  font-size: 13px !important;
 }
 .rec-quality-select {
   height: 30px !important;
