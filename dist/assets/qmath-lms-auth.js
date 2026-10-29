@@ -2650,30 +2650,56 @@
     const canExportPdf = (userRole === 'teacher') || (lesson?.allowStudentPdf !== false);
     const hasVideo = !!lesson?.video;
     const materials = Array.isArray(lesson?.materials) ? lesson.materials : [];
+    const isInIframe = window.self !== window.top;
 
+    // Auto-updating page indicator
+    let pagePill = document.getElementById('qmath-viewer-page-pill');
+    if (!pagePill) {
+      pagePill = document.createElement('div');
+      pagePill.id = 'qmath-viewer-page-pill';
+      pagePill.style.cssText = 'position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(15,23,42,0.85);backdrop-filter:blur(8px);color:#f1f5f9;font-size:12px;font-weight:700;padding:4px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.15);pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,0.3);letter-spacing:0.02em;transition:opacity 0.25s;';
+      document.body.appendChild(pagePill);
+    }
+    const updatePill = () => {
+      try {
+        const total = (window.__NR_EDITOR?.doc?.pages?.length) || lesson?.pageCount || 1;
+        const cur = typeof window.__NR_EDITOR?.currentPage === 'function' ? window.__NR_EDITOR.currentPage() + 1 : 1;
+        pagePill.textContent = `Trang ${cur} / ${total}`;
+      } catch (_) {}
+    };
+    updatePill();
+    const scroller = document.querySelector('.board-scroller');
+    if (scroller) scroller.addEventListener('scroll', updatePill, { passive: true });
+
+    // In iframe mode, LMS parent modal already displays top header and PDF button
+    if (isInIframe) {
+      return;
+    }
+
+    // Standalone top floating pill
     vBar = document.createElement('div');
     vBar.id = 'qmath-viewer-bottom-bar';
-    vBar.style.cssText = 'position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(15,23,42,0.94);backdrop-filter:blur(10px);color:#fff;padding:8px 18px;border-radius:999px;display:flex;align-items:center;gap:10px;box-shadow:0 14px 35px rgba(0,0,0,0.4);font-family:system-ui,sans-serif;font-size:12.5px;border:1px solid rgba(255,255,255,0.12);max-width:92vw;flex-wrap:wrap;justify-content:center;';
+    vBar.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(15,23,42,0.92);backdrop-filter:blur(10px);color:#fff;padding:6px 14px;border-radius:999px;display:flex;align-items:center;gap:8px;box-shadow:0 8px 25px rgba(0,0,0,0.35);font-family:system-ui,sans-serif;font-size:12px;border:1px solid rgba(255,255,255,0.12);max-width:94vw;flex-wrap:wrap;justify-content:center;';
     
     vBar.innerHTML = `
-      <span style="font-weight:800;color:#38bdf8;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+      <span style="font-weight:800;color:#38bdf8;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
         📒 ${lesson?.title || 'Bài giảng QMath'}
       </span>
       <span style="opacity:0.3;">|</span>
-      <span style="font-size:11.5px;color:#cbd5e1;">${lesson?.pageCount || 1} trang</span>
+      <span style="font-size:11px;color:#cbd5e1;">${lesson?.pageCount || 1} trang</span>
 
       ${hasVideo ? `
-        <button id="qmath-viewer-video-btn" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;padding:6px 13px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(22,163,74,0.35);">
-          <span>▶</span> Xem Video Bài Giảng
+        <button id="qmath-viewer-video-btn" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;padding:5px 11px;border-radius:999px;font-weight:800;font-size:11.5px;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(22,163,74,0.35);">
+          <span>▶</span> Video
         </button>
       ` : ''}
 
       ${materials.length > 0 ? `
         <div style="position:relative;display:inline-block;">
-          <button id="qmath-viewer-mat-btn" style="background:rgba(255,255,255,0.12);color:#fff;border:none;padding:6px 12px;border-radius:999px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;">
+          <button id="qmath-viewer-mat-btn" style="background:rgba(255,255,255,0.12);color:#fff;border:none;padding:5px 10px;border-radius:999px;font-weight:700;font-size:11.5px;cursor:pointer;display:flex;align-items:center;gap:4px;">
             <span>📎</span> Học liệu (${materials.length}) ▾
           </button>
-          <div id="qmath-viewer-mat-dropdown" style="display:none;position:absolute;bottom:calc(100% + 8px);left:0;background:#1e293b;border:1px solid rgba(255,255,255,0.15);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.4);padding:8px;min-width:220px;max-width:320px;max-height:200px;overflow-y:auto;flex-direction:column;gap:5px;z-index:99999;">
+          <div id="qmath-viewer-mat-dropdown" style="display:none;position:absolute;top:calc(100% + 8px);left:0;background:#1e293b;border:1px solid rgba(255,255,255,0.15);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.4);padding:8px;min-width:220px;max-width:320px;max-height:200px;overflow-y:auto;flex-direction:column;gap:5px;z-index:99999;">
             ${materials.map(m => `
               <a href="${m.url}" target="_blank" download="${m.name}" style="padding:6px 10px;border-radius:6px;background:rgba(255,255,255,0.06);color:#93c5fd;text-decoration:none;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                 <span>📄</span> ${m.name} (${(m.size/1024).toFixed(0)} KB)
@@ -2684,14 +2710,14 @@
       ` : ''}
 
       ${canExportPdf ? `
-        <button id="qmath-viewer-pdf-btn" style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;padding:6px 13px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;">
+        <button id="qmath-viewer-pdf-btn" style="background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;padding:5px 12px;border-radius:999px;font-weight:800;font-size:11.5px;cursor:pointer;display:flex;align-items:center;gap:4px;">
           <span>📄</span> Xuất PDF
         </button>
       ` : ''}
 
       ${userRole === 'teacher' ? `
-        <button id="qmath-viewer-edit-btn" style="background:#2563eb;color:#fff;border:none;padding:6px 13px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;">
-          ✏️ Bật sửa bài
+        <button id="qmath-viewer-edit-btn" style="background:#2563eb;color:#fff;border:none;padding:5px 12px;border-radius:999px;font-weight:800;font-size:11.5px;cursor:pointer;">
+          ✏️ Sửa bài
         </button>
       ` : ''}
     `;
@@ -2723,6 +2749,9 @@
         const st = document.getElementById('qmath-student-view-style');
         if (st) st.remove();
         vBar.remove();
+        if (pagePill) pagePill.remove();
+        window.__NR_VIEW_ONLY = false;
+        initUI();
       };
     }
   }
