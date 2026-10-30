@@ -2682,6 +2682,10 @@
     vBar.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(15,23,42,0.92);backdrop-filter:blur(10px);color:#fff;padding:6px 14px;border-radius:999px;display:flex;align-items:center;gap:8px;box-shadow:0 8px 25px rgba(0,0,0,0.35);font-family:system-ui,sans-serif;font-size:12px;border:1px solid rgba(255,255,255,0.12);max-width:94vw;flex-wrap:wrap;justify-content:center;';
     
     vBar.innerHTML = `
+      <button id="qmath-viewer-back-btn" onclick="window.history.length > 1 ? window.history.back() : window.close()" style="background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:999px;font-weight:700;font-size:11.5px;cursor:pointer;display:flex;align-items:center;gap:4px;transition:background 0.2s;">
+        <i class="fa-solid fa-arrow-left"></i> Quay lại
+      </button>
+      <span style="opacity:0.3;">|</span>
       <span style="font-weight:800;color:#38bdf8;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
         📒 ${lesson?.title || 'Bài giảng QMath'}
       </span>
