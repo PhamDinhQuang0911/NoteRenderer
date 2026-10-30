@@ -2176,3 +2176,30 @@ body.dark .rec-quality-select option {
   width: 14px !important;
   height: 13px !important;
 }
+
+/* Fullscreen Toggle Button in Toolbar */
+.tb-zoom-step-btn.tb-fullscreen-toggle {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 6px !important;
+  border: 1.5px solid rgba(0, 0, 0, 0.18) !important;
+  background: #f8fafc !important;
+  color: #334155 !important;
+  cursor: pointer !important;
+  margin: 0 4px !important;
+  transition: all 0.15s ease !important;
+}
+.tb-zoom-step-btn.tb-fullscreen-toggle:hover {
+  background: #e2e8f0 !important;
+  border-color: #0284c7 !important;
+  color: #0284c7 !important;
+  transform: scale(1.05) !important;
+}
+body.nr-fullscreen .tb-zoom-step-btn.tb-fullscreen-toggle {
+  background: rgba(225, 29, 72, 0.12) !important;
+  color: #e11d48 !important;
+  border-color: rgba(225, 29, 72, 0.35) !important;
+}
