@@ -1,9 +1,9 @@
 const fs = require('fs');
-const bundle = fs.readFileSync('C:/Users/ADMIN/Documents/GitHub/NoteRenderer/dist/assets/index-C4FEyT2h.js', 'utf8');
+const jsVanilla = fs.readFileSync('C:/Users/ADMIN/Documents/GitHub/NoteRenderer/scripts/index-CtXdKE8z-vanilla.js', 'utf8');
 
-let idx = 0;
-while ((idx = bundle.indexOf('addPapers', idx)) !== -1) {
-  console.log(`--- Match at ${idx} ---`);
-  console.log(bundle.slice(Math.max(0, idx - 200), Math.min(bundle.length, idx + 400)));
-  idx += 'addPapers'.length;
+let pos = 0;
+while ((pos = jsVanilla.indexOf('addPapers:', pos)) !== -1) {
+  console.log('addPapers: at', pos);
+  console.log(jsVanilla.substring(pos - 50, pos + 250));
+  pos += 10;
 }

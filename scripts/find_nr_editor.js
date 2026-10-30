@@ -1,8 +1,13 @@
 const fs = require('fs');
-const bundle = fs.readFileSync('C:/Users/ADMIN/Documents/GitHub/NoteRenderer/dist/assets/index-C4FEyT2h.js', 'utf8');
+const js = fs.readFileSync('C:/Users/ADMIN/Documents/GitHub/NoteRenderer/dist/assets/index-CtXdKE8z.js', 'utf8');
 
-let idx = 0;
-while ((idx = bundle.indexOf('__NR_EDITOR', idx)) !== -1) {
-  console.log('__NR_EDITOR at', idx, ':', bundle.slice(Math.max(0, idx - 100), Math.min(bundle.length, idx + 200)));
-  idx += 11;
+let pos = js.indexOf('_nrEditor');
+console.log('_nrEditor at:', pos);
+if (pos !== -1) {
+  console.log(js.substring(pos - 40, pos + 200));
+} else {
+  // search for __NR_EDITOR
+  pos = js.indexOf('__NR_EDITOR');
+  console.log('__NR_EDITOR at:', pos);
+  console.log(js.substring(pos - 40, pos + 200));
 }
