@@ -1,9 +1,11 @@
 const fs = require('fs');
-const bundle = fs.readFileSync('C:/Users/ADMIN/Documents/GitHub/NoteRenderer/dist/assets/index-C4FEyT2h.js', 'utf8');
+const code = fs.readFileSync('C:/Users/ADMIN/Documents/GitHub/NoteRenderer/dist/assets/index-CtXdKE8z.js', 'utf8');
 
-let idx = 0;
-while ((idx = bundle.indexOf('pickPdf', idx)) !== -1) {
-  console.log('--- pickPdf at ' + idx + ' ---');
-  console.log(bundle.slice(Math.max(0, idx - 150), Math.min(bundle.length, idx + 400)));
-  idx += 'pickPdf'.length;
+let pos = 0;
+while (true) {
+    const idx = code.indexOf('pickPdf', pos);
+    if (idx === -1) break;
+    console.log('--- pickPdf match at', idx, '---');
+    console.log(code.substring(Math.max(0, idx - 50), Math.min(code.length, idx + 350)));
+    pos = idx + 7;
 }

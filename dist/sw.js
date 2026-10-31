@@ -1,4 +1,4 @@
-const CACHE_NAME = "nr-cache-v070-ultimate-mvvazuqy";
+const CACHE_NAME = "nr-cache-v070-ultimate-v2-mvvazuqz";
 const PRECACHE_ASSETS = [
   './favicon.png',
   './manifest.webmanifest'
