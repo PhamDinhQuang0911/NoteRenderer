@@ -1,50 +1,98 @@
 const fs = require('fs');
-const acorn = require('C:/Users/ADMIN/Documents/GitHub/PhamDinhQuang0911.github.io/node_modules/acorn');
+const vm = require('vm');
 
-const bundlePath = 'C:/Users/ADMIN/Documents/GitHub/NoteRenderer/dist/assets/index-C4FEyT2h.js';
-let original = fs.readFileSync(bundlePath, 'utf8');
+let js = fs.readFileSync('C:/Users/ADMIN/Desktop/0.63-notereader/NoteRenderer-v0.7.0-Backup-PrePolish/dist/assets/index-CtXdKE8z.js', 'utf8');
 
-function test(name, content) {
-  try {
-    acorn.parse(content, { ecmaVersion: 'latest', sourceType: 'module' });
-    console.log(`[PASS] ${name}`);
-    return true;
-  } catch (e) {
-    console.log(`[FAIL] ${name} at pos ${e.pos} line ${e.loc.line} col ${e.loc.column}: ${e.message}`);
-    console.log('Context around error:');
-    console.log(content.substring(Math.max(0, e.pos - 80), Math.min(content.length, e.pos + 80)));
-    return false;
-  }
+function testStep(name, fn) {
+    try {
+        fn();
+        new vm.SourceTextModule(js);
+        console.log(`[PASS] ${name}`);
+    } catch (e) {
+        console.error(`[FAIL] ${name} -> ${e.message}`);
+    }
 }
 
-// Test 1: paintPenTip
-let c1 = original;
-const oldPaintPenTip = 'paintPenTip(t,n){this.tipBox=null;return;this.tipBox=this.tipBoxNow(n);const i=this.host.dataset.cursor;t.save(),t.setTransform(n,0,0,n,n*s.sx,n*s.sy),t.lineJoin="round",i==="dot"?(t.beginPath(),t.arc(0,0,2.6,0,Math.PI*2),t.fillStyle="#222",t.fill(),t.strokeStyle="#fff",t.lineWidth=1.2,t.stroke()):i==="system"||i==="hand"?/Mac/.test(navigator.platform)?(t.fillStyle="#222",t.strokeStyle="#fff",t.lineWidth=1.2,t.stroke(jd().arrow),t.fill(jd().arrow)):(t.setTransform(1,0,0,1,Math.round(n*s.sx),Math.round(n*s.sy)),t.fillStyle="#fff",t.strokeStyle="#000",t.lineWidth=1,t.fill(jd().arrow),t.stroke(jd().arrow)):(t.translate(-2,-22),t.fillStyle="#fff",t.strokeStyle="#222",t.lineWidth=1.4,t.fill(jd().body),t.stroke(jd().body),t.fillStyle="#222",t.fill(jd().point)),t.restore()}';
-const newPaintPenTip = 'paintPenTip(t,n){const s=this.penTip;if(!s){this.tipBox=null;return;}this.tipBox=this.tipBoxNow(n);const i=this.host.dataset.cursor||"pen";t.save(),t.setTransform(n,0,0,n,n*s.sx,n*s.sy),t.lineJoin="round",i==="dot"?(t.beginPath(),t.arc(0,0,2.8,0,Math.PI*2),t.fillStyle="#222",t.fill(),t.strokeStyle="#fff",t.lineWidth=1.2,t.stroke()):i==="system"||i==="hand"?/Mac/.test(navigator.platform)?(t.fillStyle="#222",t.strokeStyle="#fff",t.lineWidth=1.2,t.stroke(jd().arrow),t.fill(jd().arrow)):(t.setTransform(1,0,0,1,Math.round(n*s.sx),Math.round(n*s.sy)),t.fillStyle="#fff",t.strokeStyle="#000",t.lineWidth=1,t.fill(jd().arrow),t.stroke(jd().arrow)):(t.translate(-2,-22),t.fillStyle="#ffffff",t.strokeStyle="#222222",t.lineWidth=1.4,t.fill(jd().body),t.stroke(jd().body),t.fillStyle="#222222",t.fill(jd().point)),t.restore()}';
-c1 = c1.replace(oldPaintPenTip, newPaintPenTip);
-test('1. paintPenTip', c1);
+// FIX 1: JS Esc key
+testStep('Fix 1: Esc key', () => {
+    const jsEscTarget = 'const E=X=>{if(X.key==="Escape"&&(Ks||document.body.classList.contains("nr-fullscreen")||document.fullscreenElement)){X.preventDefault(),xu(!1)}},ae=()=>{document.fullscreenElement||e.setFullScreen||(Z5(!1),yt({fullScreen:!1}),document.body.classList.remove("nr-fullscreen"))}';
+    const jsEscReplacement = 'const E=X=>{if(X.key==="Escape"&&(Ks||document.body.classList.contains("nr-fullscreen")||document.fullscreenElement)){X.preventDefault(),X.stopPropagation(),xu(!1)}},ae=()=>{document.fullscreenElement||(Z5(!1),yt({fullScreen:!1}),document.body.classList.remove("nr-fullscreen"))}';
+    if (!js.includes(jsEscTarget)) throw new Error('Target not found');
+    js = js.replace(jsEscTarget, jsEscReplacement);
+});
 
-// Test 2: down and move penTip
-const oldDownPenTip = 'this.showPointer(t),t.pointerType==="pen"&&(this.penTip={sx:n,sy:s})';
-const newDownPenTip = 'this.showPointer(t),(t.pointerType==="pen"||t.pointerType==="mouse"||this.tool.k==="pen"||this.tool.k==="highlighter"||this.tool.k==="scratch")&&(this.penTip={sx:n,sy:s})';
-c1 = c1.replace(oldDownPenTip, newDownPenTip);
+// FIX 2a: Di xoa button inside Fragment with Uniform
+testStep('Fix 2a: Di xoa button', () => {
+    const uniformTarget = 'uniform:()=>(St("pen")||St("highlighter"))&&p.jsx(ct,{title:u.pressure===!1?"Nét đều: ĐANG BẬT (bấm để chuyển nét thanh đậm)":"Nét đều: ĐANG TẮT (bấm để viết các nét chữ đều nhau)",on:u.pressure===!1,className:u.pressure===!1?"on checked":"",onClick:()=>{const next=u.pressure===!1?void 0:!1;va({pressure:next}),yt({pen:{...u,pressure:next}});try{if(Q&&Q.pen){Q.pen={...Q.pen,pressure:next}}}catch(_){}},children:p.jsxs("span",{style:{display:"inline-flex",alignItems:"center",gap:"2px",fontSize:"11px",fontWeight:"700",letterSpacing:"-0.2px"},children:[p.jsx("svg",{width:"14",height:"14",viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2.2",strokeLinecap:"round",children:p.jsx("path",{d:"M3 9h18M3 15h18"})}),p.jsx("span",{children:"Đều"})]})}),shapes:';
 
-const oldMovePenTip = 't.pointerType==="pen"&&(this.penTip={sx:s,sy:o})';
-const newMovePenTip = '(t.pointerType==="pen"||t.pointerType==="mouse"||r.k==="ink")&&(this.penTip={sx:s,sy:o})';
-c1 = c1.replace(oldMovePenTip, newMovePenTip);
-test('2. down and move penTip', c1);
+    const uniformWithScratch = 'uniform:()=>(St("pen")||St("highlighter"))&&p.jsxs(p.Fragment,{children:[p.jsx(ct,{title:u.pressure===!1?"Nét đều: ĐANG BẬT (bấm để chuyển nét thanh đậm)":"Nét đều: ĐANG TẮT (bấm để viết các nét chữ đều nhau)",on:u.pressure===!1,className:u.pressure===!1?"on checked":"",onClick:()=>{const next=u.pressure===!1?void 0:!1;va({pressure:next}),yt({pen:{...u,pressure:next}});try{if(Q&&Q.pen){Q.pen={...Q.pen,pressure:next}}}catch(_){}},children:p.jsxs("span",{style:{display:"inline-flex",alignItems:"center",gap:"2px",fontSize:"11px",fontWeight:"700",letterSpacing:"-0.2px"},children:[p.jsx("svg",{width:"14",height:"14",viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2.2",strokeLinecap:"round",children:p.jsx("path",{d:"M3 9h18M3 15h18"})}),p.jsx("span",{children:"Đều"})]})}),p.jsx(ct,{title:_s?"Di xoá: ĐANG BẬT (tô di qua lại đè lên chữ để xoá)":"Di xoá: ĐANG TẮT (bấm để bật tô di đè chữ để xoá)",on:_s,className:_s?"on checked":"",onClick:()=>{const next=!_s;bo(n.scratchEraseNow(next));Au(next)},children:p.jsxs("span",{style:{display:"inline-flex",alignItems:"center",gap:"2px",fontSize:"11px",fontWeight:"700",letterSpacing:"-0.2px"},children:[p.jsx("svg",{width:"14",height:"14",viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2.2",strokeLinecap:"round",strokeLinejoin:"round",children:p.jsx("path",{d:"M3 17l4-8 4 8 4-8 4 8"})}),p.jsx("span",{children:"Di xoá"})]})})]}),shapes:';
 
-// Test 4: Fullscreen button
-const oldActionsEnd = 'f.jsx(Nt,{title:_5?"Thanh công cụ: Chuyển về 1 dòng":"Thanh công cụ: Hiển thị 2 dòng",on:_5,onClick:toggleTwoRows,children:f.jsx("span",{style:{fontSize:"13px",fontWeight:"bold",color:"var(--muted, #555)"},children:"2☰"})})]})';
-const newActionsEnd = 'f.jsx(Nt,{title:$h?"Thu nhỏ cửa sổ (F11)":"Phóng to toàn màn hình (F11)",on:$h,onClick:d2,children:$h?f.jsx("svg",{width:"16",height:"16",viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2.2",strokeLinecap:"round",strokeLinejoin:"round",children:f.jsx("path",{d:"M4 14h6v6m10-10h-6V4m0 6 7-7M3 21l7-7"})}):f.jsx("svg",{width:"16",height:"16",viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2.2",strokeLinecap:"round",strokeLinejoin:"round",children:f.jsx("path",{d:"M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"})})}),f.jsx(Nt,{title:_5?"Thanh công cụ: Chuyển về 1 dòng":"Thanh công cụ: Hiển thị 2 dòng",on:_5,onClick:toggleTwoRows,children:f.jsx("span",{style:{fontSize:"13px",fontWeight:"bold",color:"var(--muted, #555)"},children:"2☰"})})]})';
-let cActions = c1.replace(oldActionsEnd, newActionsEnd);
-test('3. Fullscreen button', cActions);
+    if (!js.includes(uniformTarget)) throw new Error('Uniform target not found');
+    js = js.replace(uniformTarget, uniformWithScratch);
+});
 
-// Test 3: Zoom buttons in tb-title
-const idxTbTitleStart = c1.indexOf('children:bt("pageZoom")&&f.jsxs(f.Fragment,{children:[f.jsx(Oo,{align:"center",open:Bt==="page"');
-const idxTbTitleEnd = c1.indexOf('className:"tb-group tools"', idxTbTitleStart);
+// FIX 2b: PU sensitivity
+testStep('Fix 2b: PU sensitivity', () => {
+    const puTarget = 'return d[0]>=4&&u>=2.5*h||d[1]>=6}';
+    const puReplacement = 'return(d[0]>=3&&u>=1.8*h)||(d[0]>=4&&u>=2.5*h)||d[1]>=4}';
+    if (!js.includes(puTarget)) throw new Error('Target not found');
+    js = js.replace(puTarget, puReplacement);
+});
 
-const newFullTbTitle = `children:bt("pageZoom")&&f.jsxs(f.Fragment,{children:[f.jsx(Oo,{align:"center",open:Bt==="page",setOpen:E=>_t(E?"page":""),button:f.jsxs("button",{className:"zoom-button",onClick:()=>{hr(String(((i==null?void 0:i.page)??0)+1)),_t(Bt==="page"?"":"page")},children:[i?i.page+1:1," / ",(i==null?void 0:i.pages)??1]}),children:p0(!e.mobile)}),f.jsx("span",{className:"dot",children:"·"}),f.jsx("button",{className:"tb-zoom-step-btn",title:"Thu nhỏ trang (-)",onClick:()=>Z==null?void 0:Z.setZoom(Math.max(.2,Math.round((((i==null?void 0:i.zoom)??1)/1.2)*100)/100)),style:{width:"22px",height:"24px",borderRadius:"4px",border:"1px solid var(--border,rgba(0,0,0,0.15))",background:"transparent",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:"14px",fontWeight:"700",padding:0,margin:"0 2px",color:"inherit"},children:"−"}),f.jsxs(Oo,{align:"center",open:Bt==="zoom",setOpen:E=>_t(E?"zoom":""),button:f.jsx("button",{className:"zoom-button",onClick:()=>{Ur(String(Math.round(((i==null?void 0:i.zoom)??1)*100))),_t(Bt==="zoom"?"":"zoom")},children:og}),children:[f.jsxs("form",{className:"zoom-input",onClick:E=>E.stopPropagation(),onSubmit:E=>{E.preventDefault();const X=Number(Oh.replace(",","."));!Number.isFinite(X)||X<=0||(Z==null||Z.setZoom(X/100),_t(""))},children:[f.jsxs("label",{children:[n.zoomTo,f.jsx("input",{type:"text",inputMode:"decimal",value:Oh,autoFocus:!e.mobile,onFocus:E=>E.target.select(),onChange:E=>Ur(E.target.value)}),"%"]}),f.jsx("button",{type:"submit",className:"zoom-apply",children:n.apply})]}),f.jsx("hr",{}),f.jsxs("button",{className:i!=null&&i.zoomLock?"checked":"",onClick:()=>Z==null?void 0:Z.setZoomLock(!(i!=null&&i.zoomLock)),children:[n.zoomLock,f.jsx("kbd",{children:bn("zoomLock")})]}),f.jsxs("button",{onClick:()=>Z==null?void 0:Z.fitWidth(),children:[n.fitWidth,f.jsx("kbd",{children:bn("fitWidth")})]}),[.5,.75,1,1.5,2,3].map(E=>f.jsxs("button",{onClick:()=>Z==null?void 0:Z.setZoom(E),children:[E*100,"%"]},E))]}),f.jsx("button",{className:"tb-zoom-step-btn",title:"Phóng to trang (+)",onClick:()=>Z==null?void 0:Z.setZoom(Math.min(5,Math.round((((i==null?void 0:i.zoom)??1)*1.2)*100)/100)),style:{width:"22px",height:"24px",borderRadius:"4px",border:"1px solid var(--border,rgba(0,0,0,0.15))",background:"transparent",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:"14px",fontWeight:"700",padding:0,margin:"0 2px",color:"inherit"},children:"+"})]}),f.jsx("div",{`;
+// FIX 2c: EU sensitivity
+testStep('Fix 2c: EU sensitivity', () => {
+    const euTarget = 'u>=.6*c&&r.push(l)';
+    const euReplacement = '(u>=.35*c||u>=5)&&r.push(l)';
+    if (!js.includes(euTarget)) throw new Error('Target not found');
+    js = js.replace(euTarget, euReplacement);
+});
 
-let cZoom = c1.substring(0, idxTbTitleStart) + newFullTbTitle + c1.substring(idxTbTitleEnd);
-test('4. Zoom buttons in tb-title', cZoom);
+// FIX 3a: down(t) ink
+testStep('Fix 3a: down(t) ink', () => {
+    const downInkTarget = 'stroke:{id:He(),kind:b,color:v.color,width:v.width,pts:[S.x,S.y,k],...this.dashed&&!g?{dashed:!0}:{},...b==="pen"&&!g&&this.pen.type!=="ballpoint"?{pen:this.pen.type}:{},...b==="pen"&&!g&&(this.pen.smooth??1)!==1?{smooth:this.pen.smooth}:{},...b==="highlighter"&&this.highlighter.alpha!==void 0?{alpha:this.highlighter.alpha}:{}}},this.redraw();return}case"select":';
+    const downInkReplacement = 'stroke:{id:He(),kind:b,color:v.color,width:v.width,pts:[S.x,S.y,k],...this.dashed&&!g?{dashed:!0}:{},...b==="pen"&&!g&&this.pen.type!=="ballpoint"?{pen:this.pen.type}:{},...b==="pen"&&!g&&(this.pen.smooth??1)!==1?{smooth:this.pen.smooth}:{},...b==="highlighter"&&this.highlighter.alpha!==void 0?{alpha:this.highlighter.alpha}:{}}};if(this.lowLatency&&this.canvas.width&&this.canvas.height){const _wb=this.wetBase??(this.wetBase=document.createElement("canvas"));(_wb.width!==this.canvas.width||_wb.height!==this.canvas.height)&&(_wb.width=this.canvas.width,_wb.height=this.canvas.height);const _wctx=_wb.getContext("2d");_wctx.setTransform(1,0,0,1,0,0),_wctx.drawImage(this.canvas,0,0),this.wetKey=this.viewKey();const _dpr=window.devicePixelRatio||1,_l=this.zoom,_c=x=>Math.round(x*_dpr)/_dpr;this.wetAt={dpr:_dpr,z:_l,left:_c(this.offsetX-this.scroller.scrollLeft),top:_c(this.pageTop(i)*_l-this.scroller.scrollTop)},this.wetN=0,this.needFull=!1,this.paintWet()||this.redraw()}else this.redraw();return}case"select":';
+    if (!js.includes(downInkTarget)) throw new Error('Target not found');
+    js = js.replace(downInkTarget, downInkReplacement);
+});
+
+// FIX 3b: paintSoon
+testStep('Fix 3b: paintSoon', () => {
+    const paintSoonTarget = 'paintSoon(){this.lowLatency&&!this.needFull&&performance.now()-this.lastPaint>=5&&this.paintWet()||this.schedule()}';
+    const paintSoonReplacement = 'paintSoon(){(this.lowLatency&&!this.needFull&&this.paintWet())||this.schedule()}';
+    if (!js.includes(paintSoonTarget)) throw new Error('Target not found');
+    js = js.replace(paintSoonTarget, paintSoonReplacement);
+});
+
+// FIX 4a: mne component
+testStep('Fix 4a: mne component', () => {
+    const mneTarget = 'function mne({kind:e,scale:t,off:n}){const o=q.useRef(null),s=q.useRef(n);s.current=n;const i=e==="pen"||e==="dot"?e:"arrow",r=dne[i];return q.useEffect(()=>{const a=o.current;let l=0;const c=()=>{clearTimeout(l),a.style.display="none"},u=g=>{if(g.pointerType==="pen"){if(clearTimeout(l),s.current||g.buttons&32||g.button===5)return c();const evs=g.getCoalescedEvents?g.getCoalescedEvents():null,last=evs&&evs.length?evs[evs.length-1]:g;a.style.display="block",a.style.transform=`translate3d(${last.clientX-r.x*t}px, ${last.clientY-r.y*t}px, 0)`}},h=g=>{g.pointerType==="pen"&&(clearTimeout(l),l=window.setTimeout(c,pne))},d=g=>{g.pointerType==="pen"&&!g.relatedTarget&&c()},f={capture:!0,passive:!0};return window.addEventListener("pointerdown",u,f),window.addEventListener("pointermove",u,f),"onpointerrawupdate"in window&&window.addEventListener("pointerrawupdate",u,f),window.addEventListener("pointerup",h,f),window.addEventListener("pointercancel",c,f),window.addEventListener("pointerout",d,f),()=>{clearTimeout(l),window.removeEventListener("pointerdown",u,f),window.removeEventListener("pointermove",u,f),"onpointerrawupdate"in window&&window.removeEventListener("pointerrawupdate",u,f),window.removeEventListener("pointerup",h,f),window.removeEventListener("pointercancel",c,f),window.removeEventListener("pointerout",d,f)}},[r,t]),q.useEffect(()=>{n&&o.current&&(o.current.style.display="none")},[n]),p.jsx("div",{ref:o,className:"tablet-cursor",style:{width:r.size*t,height:r.size*t,backgroundImage:`url("data:image/svg+xml,${encodeURIComponent(hne[i])}")`}})}';
+
+    const mneReplacement = 'function mne({kind:e,scale:t,off:n}){const o=q.useRef(null),s=q.useRef(n);s.current=n;const i=e==="pen"||e==="dot"?e:"arrow",r=dne[i];return q.useEffect(()=>{const a=o.current;if(!a)return;let l=0,rafId=0,px=-100,py=-100;const c=()=>{clearTimeout(l),rafId&&(cancelAnimationFrame(rafId),rafId=0),a.style.display="none"},sync=()=>{rafId=0,a.style.display!=="block"&&(a.style.display="block"),a.style.transform=`translate3d(${px-r.x*t}px, ${py-r.y*t}px, 0)`},u=g=>{if(g.pointerType==="pen"){clearTimeout(l);if(s.current||g.buttons&32||g.button===5)return c();const evs=g.getCoalescedEvents?g.getCoalescedEvents():null,last=evs&&evs.length?evs[evs.length-1]:g;px=last.clientX,py=last.clientY,rafId||(rafId=requestAnimationFrame(sync))}},h=g=>{g.pointerType==="pen"&&(clearTimeout(l),l=window.setTimeout(c,pne))},d=g=>{if(g.pointerType==="pen"&&(g.clientX<=0||g.clientY<=0||g.clientX>=window.innerWidth||g.clientY>=window.innerHeight)){clearTimeout(l),l=window.setTimeout(c,200)}},f={capture:!0,passive:!0};return window.addEventListener("pointerdown",u,f),window.addEventListener("pointermove",u,f),"onpointerrawupdate"in window&&window.addEventListener("pointerrawupdate",u,f),window.addEventListener("pointerup",h,f),window.addEventListener("pointercancel",c,f),window.addEventListener("pointerout",d,f),()=>{clearTimeout(l),rafId&&(cancelAnimationFrame(rafId),rafId=0),window.removeEventListener("pointerdown",u,f),window.removeEventListener("pointermove",u,f),"onpointerrawupdate"in window&&window.removeEventListener("pointerrawupdate",u,f),window.removeEventListener("pointerup",h,f),window.removeEventListener("pointercancel",c,f),window.removeEventListener("pointerout",d,f)}},[r,t]),q.useEffect(()=>{n&&o.current&&(o.current.style.display="none")},[n]),p.jsx("div",{ref:o,className:"tablet-cursor",style:{width:r.size*t,height:r.size*t,backgroundImage:`url("data:image/svg+xml,${encodeURIComponent(hne[i])}")`}})}';
+
+    if (!js.includes(mneTarget)) throw new Error('Target not found');
+    js = js.replace(mneTarget, mneReplacement);
+});
+
+// FIX 4b: mne render
+testStep('Fix 4b: mne render', () => {
+    const mneRender = 'e.mobile&&dm&&p.jsx(mne,{kind:Cu,scale:ir,off:a.k==="eraser"})';
+    const mneRenderReplacement = 'dm&&p.jsx(mne,{kind:Cu,scale:ir,off:a.k==="eraser"})';
+    if (!js.includes(mneRender)) throw new Error('Target not found');
+    js = js.replace(mneRender, mneRenderReplacement);
+});
+
+// FIX 4c: dm state
+testStep('Fix 4c: dm state', () => {
+    const dmStateTarget = '[dm,pm]=q.useState(c.tabletCursor??!1)';
+    const dmStateReplacement = '[dm,pm]=q.useState(c.tabletCursor??!0)';
+    if (!js.includes(dmStateTarget)) throw new Error('Target not found');
+    js = js.replace(dmStateTarget, dmStateReplacement);
+});
+
+// FIX 4d: settings modal tabletCursor
+testStep('Fix 4d: settings modal tabletCursor', () => {
+    const settingsTabletTarget = 'tabletCursor:e.mobile?dm:void 0';
+    const settingsTabletReplacement = 'tabletCursor:dm';
+    if (!js.includes(settingsTabletTarget)) throw new Error('Target not found');
+    js = js.replace(settingsTabletTarget, settingsTabletReplacement);
+});
