@@ -286,48 +286,101 @@
     };
   }
 
-  async function performLocalAutoBackup() {
+  let isBackingUp = false;
+  let lastSlotBackupTime = 0;
+  let backupDebounceTimer = null;
+
+  function isUserInkingOrInteracting() {
+    try {
+      const ed = window.__NR_EDITOR || window.__noteRendererEditor;
+      if (!ed) return false;
+      if (ed.drag) return true;
+      if (typeof ed.busy === 'function' && ed.busy()) return true;
+      if (ed.lastPaint && (performance.now() - ed.lastPaint < 5000)) return true;
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function performLocalAutoBackup(forceImmediate = false) {
     if (activeContext.viewMode || userRole !== 'teacher') return;
     if (!window.__NR_EDITOR || !window.__NR_EDITOR.doc || !window.__NR_API) return;
+    if (isBackingUp) return;
+
+    if (!forceImmediate && isUserInkingOrInteracting()) {
+      scheduleDebouncedAutoBackup();
+      return;
+    }
 
     const info = computeDocSignature(window.__NR_EDITOR.doc);
     if (!info.hasContent) return;
     if (info.sig === lastLocalBackupSignature) return;
 
+    isBackingUp = true;
     try {
-      const nrnBytes = await window.__NR_API.encode(window.__NR_EDITOR.doc);
-      const now = Date.now();
-      const sessionKey = activeContext.lessonId
-        ? `lesson_${activeContext.lessonId}`
-        : (activeContext.classId ? `class_${activeContext.classId}` : 'latest_session');
+      const executeSave = async () => {
+        try {
+          const nrnBytes = await window.__NR_API.encode(window.__NR_EDITOR.doc);
+          const now = Date.now();
+          const sessionKey = activeContext.lessonId
+            ? `lesson_${activeContext.lessonId}`
+            : (activeContext.classId ? `class_${activeContext.classId}` : 'latest_session');
 
-      const record = {
-        id: sessionKey,
-        title: currentLoadedLesson?.title || document.title || `Bản nháp ngày ${new Date().toLocaleDateString('vi-VN')}`,
-        classId: activeContext.classId || currentLoadedLesson?.classId || '',
-        className: currentLoadedLesson?.className || '',
-        lessonId: activeContext.lessonId || currentLoadedLesson?.id || '',
-        chapter: currentLoadedLesson?.chapter || '',
-        pageCount: info.pageCount,
-        strokeCount: info.strokeCount,
-        itemCount: info.itemCount,
-        sig: info.sig,
-        unsavedToCloud: info.sig !== lastCloudSavedSignature,
-        updatedAt: now,
-        nrnBytes
+          const record = {
+            id: sessionKey,
+            title: currentLoadedLesson?.title || document.title || `Bản nháp ngày ${new Date().toLocaleDateString('vi-VN')}`,
+            classId: activeContext.classId || currentLoadedLesson?.classId || '',
+            className: currentLoadedLesson?.className || '',
+            lessonId: activeContext.lessonId || currentLoadedLesson?.id || '',
+            chapter: currentLoadedLesson?.chapter || '',
+            pageCount: info.pageCount,
+            strokeCount: info.strokeCount,
+            itemCount: info.itemCount,
+            sig: info.sig,
+            unsavedToCloud: info.sig !== lastCloudSavedSignature,
+            updatedAt: now,
+            nrnBytes
+          };
+
+          await idbPutBackup(record);
+          
+          if (now - lastSlotBackupTime >= 5 * 60 * 1000) {
+            lastSlotBackupTime = now;
+            const slotId = `slot_${Math.floor(now / (5 * 60 * 1000)) % 8}`;
+            await idbPutBackup({ ...record, id: slotId });
+          }
+
+          lastLocalBackupSignature = info.sig;
+          lastLocalBackupAt = now;
+          updateSaveStatusBadge();
+        } catch (e) {
+          console.warn('[AutoBackup] Lỗi lưu nháp tự động:', e);
+        } finally {
+          isBackingUp = false;
+        }
       };
 
-      await idbPutBackup(record);
-      // Cũng lưu 1 bản lịch sử theo mốc 5 phút để phòng trường hợp cần quay lại bản cũ
-      const slotId = `slot_${Math.floor(now / (5 * 60 * 1000)) % 8}`;
-      await idbPutBackup({ ...record, id: slotId });
-
-      lastLocalBackupSignature = info.sig;
-      lastLocalBackupAt = now;
-      updateSaveStatusBadge();
+      if (forceImmediate || typeof requestIdleCallback === 'undefined') {
+        await executeSave();
+      } else {
+        requestIdleCallback(() => { executeSave(); }, { timeout: 2000 });
+      }
     } catch (e) {
-      console.warn('[AutoBackup] Lỗi lưu nháp tự động:', e);
+      isBackingUp = false;
+      console.warn('[AutoBackup] Lỗi chuẩn bị lưu nháp:', e);
     }
+  }
+
+  function scheduleDebouncedAutoBackup() {
+    clearTimeout(backupDebounceTimer);
+    backupDebounceTimer = setTimeout(() => {
+      if (!isUserInkingOrInteracting()) {
+        performLocalAutoBackup(false);
+      } else {
+        scheduleDebouncedAutoBackup();
+      }
+    }, 5000);
   }
 
   function startChangeWatcherAndAutoBackup() {
@@ -344,10 +397,15 @@
       }
     }, 1000);
 
-    let tick = 0;
     watchIntervalId = setInterval(async () => {
       if (activeContext.viewMode || userRole !== 'teacher') return;
       if (!window.__NR_EDITOR || !window.__NR_EDITOR.doc) return;
+
+      // NẾU ĐANG VẼ HOẶC VỪA VẼ NÉT TRONG VÒNG 5 GIÂY: BỎ QUA HOÀN TOÀN ĐỂ TRÁNH GIẬT KHUNG HÌNH
+      if (isUserInkingOrInteracting()) {
+        scheduleDebouncedAutoBackup();
+        return;
+      }
 
       const info = computeDocSignature(window.__NR_EDITOR.doc);
       if (!initialDocSignature) initialDocSignature = info.sig;
@@ -358,12 +416,11 @@
         updateSaveStatusBadge();
       }
 
-      tick++;
-      // Cứ 3 nhịp (4.5 giây) tự động backup vào ổ cứng IndexedDB nếu có thay đổi
-      if (tick % 3 === 0 && info.hasContent && info.sig !== lastLocalBackupSignature) {
-        await performLocalAutoBackup();
+      // Chỉ backup khi thực sự rảnh tay (không viết) và có nội dung mới chưa backup
+      if (info.hasContent && info.sig !== lastLocalBackupSignature && !isBackingUp) {
+        scheduleDebouncedAutoBackup();
       }
-    }, 1500);
+    }, 2000);
 
     // Cảnh báo trước khi đóng tab / tắt trình duyệt nếu có thay đổi chưa lưu lên Lớp học
     window.addEventListener('beforeunload', (e) => {
@@ -375,7 +432,7 @@
       if (window.__NR_EDITOR && window.__NR_EDITOR.doc) {
         try {
           // Luôn thực hiện backup cục bộ tức thì trước khi đóng tab/app để chống mất điện
-          performLocalAutoBackup();
+          performLocalAutoBackup(true);
         } catch (_) {}
         const info = computeDocSignature(window.__NR_EDITOR.doc);
         if (info.hasContent && info.sig !== lastCloudSavedSignature) {

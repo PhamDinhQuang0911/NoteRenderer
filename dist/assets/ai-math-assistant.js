@@ -493,7 +493,7 @@
   // 4. Cập nhật vị trí nút nổi
   function updateFloatingButton() {
     const editor = window.__noteRendererEditor;
-    if (!editor || !editor.sel || !editor.sel.strokes || editor.sel.strokes.size === 0) {
+    if (!editor || editor.drag || (editor.busy && editor.busy()) || !editor.sel || !editor.sel.strokes || editor.sel.strokes.size === 0) {
       btn.style.display = "none";
       menu.style.display = "none";
       return;
