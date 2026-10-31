@@ -1,91 +1,218 @@
 const fs = require('fs');
-const { execSync } = require('child_process');
+const path = require('path');
 
-const bundlePath = 'C:/Users/ADMIN/Documents/GitHub/NoteRenderer/dist/assets/index-CtXdKE8z.js';
-let code = fs.readFileSync(bundlePath, 'utf8');
+const cssPath = 'C:/Users/ADMIN/Documents/GitHub/NoteRenderer/dist/assets/index-DiHPgRMg.css';
+const jsPath = 'C:/Users/ADMIN/Documents/GitHub/NoteRenderer/dist/assets/index-CtXdKE8z.js';
 
-// 1. Item 1: Add quickNote to M1.figures and keyActions
-const m1Needle = 'figures:["shapes","segment","vector","line","circle","triangle","rect","square","geo","geoMove","gridSnap","trace","clearTrace","graph","vartable","oxyz","flatPlane","spreadPlane","formula","problem","tikzFigure","tikzImage","chem","periodic","lab","circuit","forces","optics","physGraph","bioGraph","waveTool","fieldTool","physConst","formulaSheet","ecology","dna","division","bioFig","pedigree","cross","apparatus","chemDiagram","atomTool","structure","sticker","calc","calcScreen","text",';
-const m1Repl = 'figures:["shapes","segment","vector","line","circle","triangle","rect","square","geo","geoMove","gridSnap","trace","clearTrace","graph","vartable","oxyz","flatPlane","spreadPlane","formula","problem","tikzFigure","tikzImage","chem","periodic","lab","circuit","forces","optics","physGraph","bioGraph","waveTool","fieldTool","physConst","formulaSheet","ecology","dna","division","bioFig","pedigree","cross","apparatus","chemDiagram","atomTool","structure","sticker","quickNote","calc","calcScreen","text",';
+let css = fs.readFileSync(cssPath, 'utf8');
+let js = fs.readFileSync(jsPath, 'utf8');
 
-const viKeyNeedle = 'keyActions:{newNote:"Sổ mới",open:"Mở sổ",save:"Lưu",saveAs:"Lưu thành...",undo:"Hoàn tác",redo:"Làm lại",';
-const viKeyRepl = 'keyActions:{newNote:"Sổ mới",open:"Mở sổ",save:"Lưu",saveAs:"Lưu thành...",undo:"Hoàn tác",redo:"Làm lại",quickNote:"Chèn giấy note (nhớ)",';
+console.log('Original sizes -> CSS:', css.length, 'JS:', js.length);
 
-const enKeyNeedle = 'keyActions:{newNote:"New notebook",open:"Open",save:"Save",saveAs:"Save as...",undo:"Undo",redo:"Redo",';
-const enKeyRepl = 'keyActions:{newNote:"New notebook",open:"Open",save:"Save",saveAs:"Save as...",undo:"Undo",redo:"Redo",quickNote:"Sticky quick note",';
+// ==========================================
+// FIX 1: Fullscreen toolbar isolation & Esc key
+// ==========================================
+// In CSS: Hide .tb-group:not(.tools), .tb-group.actions, .rec-bar, .tb-rec-dot, .toolbar-recording-btn, .tb-title
+// Show only .tb-group.tools centered.
+const cssFsTarget = `/* Fullscreen Classroom Mode & Recording Quality Styles (062v37) */
+body.nr-fullscreen {
+  overflow: hidden !important;
+}
+body.nr-fullscreen .tab-bar {
+  display: none !important;
+}
+body.nr-fullscreen .app {
+  height: 100vh !important;
+  width: 100vw !important;
+}
+body.nr-fullscreen .work {
+  height: 100% !important;
+  max-height: 100vh !important;
+}
+body.nr-fullscreen .toolbar .tb-title {
+  display: none !important;
+}`;
 
-// 2. Item 2: Stroke width & pressure
-const buNeedle = 'const BU=e=>.55+.9*e;function jO(e){const t=e.width/2;if(e.kind!=="pen")return()=>t;switch(e.pen){case"felt":return()=>t*1.2;case"fountain":return n=>t*(.6+.8*n);case"pencil":return n=>t*(.7+.6*n);case"brush":return n=>t*(.25+1.75*n);default:return n=>t*BU(n)}}';
-const buRepl = 'const BU=e=>Math.max(0.95,0.85+.4*e);function jO(e){const t=e.width/2;if(e.kind!=="pen")return()=>t;switch(e.pen){case"felt":return()=>t*1.2;case"fountain":return n=>t*(.88+.45*n);case"pencil":return n=>t*(.88+.35*n);case"brush":return n=>t*(.35+1.65*n);default:return n=>t*BU(n)}}';
+const cssFsReplacement = `/* Fullscreen Classroom Mode & Recording Quality Styles (062v37) */
+body.nr-fullscreen {
+  overflow: hidden !important;
+}
+body.nr-fullscreen .tab-bar {
+  display: none !important;
+}
+body.nr-fullscreen .app {
+  height: 100vh !important;
+  width: 100vw !important;
+}
+body.nr-fullscreen .work {
+  height: 100% !important;
+  max-height: 100vh !important;
+}
+body.nr-fullscreen .toolbar .tb-group:not(.tools),
+body.nr-fullscreen .toolbar .tb-group.actions,
+body.nr-fullscreen .toolbar .rec-bar,
+body.nr-fullscreen .toolbar .tb-rec-dot,
+body.nr-fullscreen .toolbar .toolbar-recording-btn,
+body.nr-fullscreen .toolbar .tb-title {
+  display: none !important;
+}
+body.nr-fullscreen .toolbar {
+  justify-content: center !important;
+}
+body.nr-fullscreen .toolbar .tb-group.tools {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  justify-content: center !important;
+  margin: 0 auto !important;
+}`;
 
-const pressNeedle = 'pressureOf(t){if(t.pointerType==="pen"&&this.pen.pressure!==!1){if(typeof t.pressure==="number"&&t.pressure>0){const p=Math.pow(t.pressure,0.85);return Math.max(0.2,Math.min(1,p));}return 0.2;}return.5;}';
-const pressRepl = 'pressureOf(t){if(t.pointerType==="pen"&&this.pen.pressure!==!1){if(typeof t.pressure==="number"&&t.pressure>0){const p=Math.pow(t.pressure,0.85);return Math.max(0.35,Math.min(1,p));}return 0.35;}return.5;}';
-
-// 3. Item 3: Tablet cursor delay (pointerrawupdate, getCoalescedEvents, translate3d)
-const mneNeedle = 'u=g=>{if(g.pointerType==="pen"){if(clearTimeout(l),s.current||g.buttons&32||g.button===5)return c();a.style.display="block",a.style.transform=`translate(${g.clientX-r.x*t}px, ${g.clientY-r.y*t}px)`}},h=g=>{g.pointerType==="pen"&&(clearTimeout(l),l=window.setTimeout(c,pne))},d=g=>{g.pointerType==="pen"&&!g.relatedTarget&&c()},f={capture:!0,passive:!0};return window.addEventListener("pointerdown",u,f),window.addEventListener("pointermove",u,f),window.addEventListener("pointerup",h,f),window.addEventListener("pointercancel",c,f),window.addEventListener("pointerout",d,f),()=>{clearTimeout(l),window.removeEventListener("pointerdown",u,f),window.removeEventListener("pointermove",u,f),window.removeEventListener("pointerup",h,f),window.removeEventListener("pointercancel",c,f),window.removeEventListener("pointerout",d,f)}}';
-const mneRepl = 'u=g=>{if(g.pointerType==="pen"){if(clearTimeout(l),s.current||g.buttons&32||g.button===5)return c();const evs=g.getCoalescedEvents?g.getCoalescedEvents():null,last=evs&&evs.length?evs[evs.length-1]:g;a.style.display="block",a.style.transform=`translate3d(${last.clientX-r.x*t}px, ${last.clientY-r.y*t}px, 0)`}},h=g=>{g.pointerType==="pen"&&(clearTimeout(l),l=window.setTimeout(c,pne))},d=g=>{g.pointerType==="pen"&&!g.relatedTarget&&c()},f={capture:!0,passive:!0};return window.addEventListener("pointerdown",u,f),window.addEventListener("pointermove",u,f),"onpointerrawupdate"in window&&window.addEventListener("pointerrawupdate",u,f),window.addEventListener("pointerup",h,f),window.addEventListener("pointercancel",c,f),window.addEventListener("pointerout",d,f),()=>{clearTimeout(l),window.removeEventListener("pointerdown",u,f),window.removeEventListener("pointermove",u,f),"onpointerrawupdate"in window&&window.removeEventListener("pointerrawupdate",u,f),window.removeEventListener("pointerup",h,f),window.removeEventListener("pointercancel",c,f),window.removeEventListener("pointerout",d,f)}}';
-
-// 4. Item 4: Space insertion option extend & PDF paper quality
-const viSpaceNeedle = 'spaceSizes:{drag:"Trang chèn cao đúng đoạn kéo",full:"Đẩy nội dung xuống trang sau (mọi trang giữ đúng khổ)",flow:"Chèn đúng đoạn kéo, nội dung bị đẩy xuống (phần tràn sang trang mới)"}';
-const viSpaceRepl = 'spaceSizes:{extend:"Kéo dài trang hiện tại (không méo ô li, không tràn trang sau)",drag:"Trang chèn cao đúng đoạn kéo",full:"Đẩy nội dung xuống trang sau (mọi trang giữ đúng khổ)",flow:"Chèn đúng đoạn kéo, nội dung bị đẩy xuống (phần tràn sang trang mới)"}';
-
-const enSpaceNeedle = 'spaceSizes:{drag:"Page put in as tall as the drag",full:"Push what is below on to the next page (pages keep their size)",flow:"Room exactly as tall as the drag, pushing what is below down (what runs over goes on to a new page)"}';
-const enSpaceRepl = 'spaceSizes:{extend:"Extend current page (no distortion, no page split)",drag:"Page put in as tall as the drag",full:"Push what is below on to the next page (pages keep their size)",flow:"Room exactly as tall as the drag, pushing what is below down (what runs over goes on to a new page)"}';
-
-const choicesNeedle = '["drag","full","flow"].map(xe=>p.jsxs("label",{className:"check",children:[p.jsx("input",{type:"radio",name:"space-size",checked:J===xe,onChange:()=>ue(xe)})," ",ht.spaceSizes[xe]]},xe))';
-const choicesRepl = '["extend","drag","full","flow"].map(xe=>p.jsxs("label",{className:"check",children:[p.jsx("input",{type:"radio",name:"space-size",checked:J===xe,onChange:()=>ue(xe)})," ",ht.spaceSizes[xe]]},xe))';
-
-const stateNeedle = '[U,W]=q.useState(c.spaceFlow?"flow":c.spaceFull?"full":"drag")';
-const stateRepl = '[U,W]=q.useState(c.spaceMode??(c.spaceFlow?"flow":c.spaceFull?"full":"extend"))';
-
-const onSaveNeedle = 'W(ce),yt({spaceFull:ce==="full",spaceFlow:ce==="flow"}),Q.spaceFull=ce==="full",Q.spaceFlow=ce==="flow"';
-const onSaveRepl = 'W(ce),yt({spaceMode:ce,spaceFull:ce==="full",spaceFlow:ce==="flow"}),Q.spaceMode=ce,Q.spaceFull=ce==="full",Q.spaceFlow=ce==="flow"';
-
-const insertSpaceNeedle = 'async insertSpace(t,n,o){var g;const s=zl(this.doc),i=(g=this.doc.pages[t])==null?void 0:g.height,r=i!==void 0&&i<s-.5;if(o>0)return await zc([this.doc.pages[t]]),r&&i+o<=s+.5&&this.pushWithin(t,n,o,i+o)||this.pushWithin(t,n,o)?void 0:this.spaceFlow?this.flowForSpace(t,n,o):this.splitForSpace(t,n,o);';
-const insertSpaceRepl = 'async extendPageForSpace(t,n,o){await zc([this.doc.pages[t]]);const page=this.doc.pages[t];if(!page)return;const curH=this.phOf(t),newH=Math.round(curH+o),newItems=[];for(const v of page.items){if(v.type==="image"&&!v.rot&&v.y<n-1&&v.y+v.h>n+1){const w=h3(v,n,v.y+v.h);w?newItems.push(w[0],{...w[1],y:w[1].y+o}):v.y+v.h/2>=n?newItems.push({...v,y:v.y+o}):newItems.push(v)}else v.y+v.h/2>=n?newItems.push({...v,y:v.y+o}):newItems.push(v)}const newStrokes=page.strokes.map(st=>{const b=Wi(st);return(b.y0+b.y1)/2<n?st:{...st,pts:st.pts.map((p,idx)=>idx%3===1?p+o:p)}}),ptsMap=gt(page.geo),compMap=d3(page.geo),compYs=new Map;for(const[ptId,cId]of compMap){const pt=ptsMap.get(ptId);pt&&compYs.set(cId,[...(compYs.get(cId)??[]),pt.y])}const shiftPtIds=new Set;for(const[cId,ys]of compYs)ys.reduce((sum,y)=>sum+y,0)/ys.length>=n&&shiftPtIds.add(cId);const newPoints={};for(const pt of Object.values(page.geo.points)){const cId=compMap.get(pt.id)??pt.id;newPoints[pt.id]=shiftPtIds.has(cId)&&pt.def.t==="free"?{...pt,def:{...pt.def,y:pt.def.y+o}}:pt}this.sel=null,this.commit(this.updatePage(t,p=>({...p,items:newItems,strokes:newStrokes,geo:{...p.geo,points:newPoints},height:newH})))}async insertSpace(t,n,o){var g;const s=zl(this.doc),i=(g=this.doc.pages[t])==null?void 0:g.height,r=i!==void 0&&i<s-.5;if(o>0){await zc([this.doc.pages[t]]);if(this.spaceMode==="extend"||(!this.spaceFlow&&!this.spaceFull&&this.spaceMode!=="drag"))return this.extendPageForSpace(t,n,o);return r&&i+o<=s+.5&&this.pushWithin(t,n,o,i+o)||this.pushWithin(t,n,o)?void 0:this.spaceFlow?this.flowForSpace(t,n,o):this.splitForSpace(t,n,o);}';
-
-const teNeedle = 'async function _te(e){const t=new Image;t.src=e,await t.decode();const W=Math.min(2400,Math.max(nu,t.naturalWidth)),H=Math.round(W*(t.naturalHeight/t.naturalWidth)),n=document.createElement("canvas");n.width=W,n.height=H;const o=n.getContext("2d");o.imageSmoothingEnabled=!0,o.imageSmoothingQuality="high",o.fillStyle="#ffffff",o.fillRect(0,0,W,H);o.drawImage(t,0,0,W,H);const a=n.toDataURL("image/jpeg",.94);return n.width=n.height=0,a}';
-const teRepl = 'async function _te(e){const t=new Image;t.src=e,await t.decode();const W=Math.min(3200,Math.max(nu,t.naturalWidth)),H=Math.round(W*(t.naturalHeight/t.naturalWidth)),n=document.createElement("canvas");n.width=W,n.height=H;const o=n.getContext("2d");o.imageSmoothingEnabled=!0,o.imageSmoothingQuality="high",o.fillStyle="#ffffff",o.fillRect(0,0,W,H);o.drawImage(t,0,0,W,H);const a=n.toDataURL("image/png");return n.width=n.height=0,a}';
-
-const patches = [
-    [m1Needle, m1Repl, 'M1.figures'],
-    [viKeyNeedle, viKeyRepl, 'VI keyActions'],
-    [enKeyNeedle, enKeyRepl, 'EN keyActions'],
-    [buNeedle, buRepl, 'BU & jO inking'],
-    [pressNeedle, pressRepl, 'pressureOf'],
-    [mneNeedle, mneRepl, 'mne cursor delay'],
-    [viSpaceNeedle, viSpaceRepl, 'VI spaceSizes'],
-    [enSpaceNeedle, enSpaceRepl, 'EN spaceSizes'],
-    [choicesNeedle, choicesRepl, 'space choices in Rte'],
-    [stateNeedle, stateRepl, 'initial space state'],
-    [onSaveNeedle, onSaveRepl, 'onSave space state'],
-    [insertSpaceNeedle, insertSpaceRepl, 'insertSpace & extendPageForSpace'],
-    [teNeedle, teRepl, '_te paperFrom 3200px PNG']
-];
-
-for (const [target, repl, name] of patches) {
-    if (!code.includes(target)) {
-        throw new Error('Target not found: ' + name);
-    }
-    code = code.replace(target, repl);
-    console.log('Applied patch:', name);
+if (css.includes(cssFsTarget)) {
+  css = css.replace(cssFsTarget, cssFsReplacement);
+  console.log('[OK] CSS Fullscreen rules applied.');
+} else if (css.includes(cssFsReplacement)) {
+  console.log('[INFO] CSS Fullscreen rules already present.');
+} else {
+  throw new Error('CSS fullscreen target not found');
 }
 
-fs.writeFileSync(bundlePath, code, 'utf8');
-console.log('Saved patched bundle to:', bundlePath);
+// In JS: Esc key handling in useEffect:
+const jsEscTarget = 'const E=X=>{if(X.key==="Escape"&&(Ks||document.body.classList.contains("nr-fullscreen")||document.fullscreenElement)){X.preventDefault(),xu(!1)}},ae=()=>{document.fullscreenElement||e.setFullScreen||(Z5(!1),yt({fullScreen:!1}),document.body.classList.remove("nr-fullscreen"))}';
+const jsEscReplacement = 'const E=X=>{if(X.key==="Escape"&&(Ks||document.body.classList.contains("nr-fullscreen")||document.fullscreenElement)){X.preventDefault(),X.stopPropagation(),xu(!1)}},ae=()=>{document.fullscreenElement||(Z5(!1),yt({fullScreen:!1}),document.body.classList.remove("nr-fullscreen"))}';
 
-// Patch pdfimport-C80fD9x7.js
-const pdfImportPath = 'C:/Users/ADMIN/Documents/GitHub/NoteRenderer/dist/assets/pdfimport-C80fD9x7.js';
-let pdfCode = fs.readFileSync(pdfImportPath, 'utf8');
-pdfCode = pdfCode.replace('const g=2400', 'const g=3200');
-pdfCode = pdfCode.replace('t.toDataURL("image/jpeg",.94)', 't.toDataURL("image/png")');
-fs.writeFileSync(pdfImportPath, pdfCode, 'utf8');
-console.log('Saved patched pdfimport to:', pdfImportPath);
+if (js.includes(jsEscTarget)) {
+  js = js.replace(jsEscTarget, jsEscReplacement);
+  console.log('[OK] JS Esc key listener polished.');
+} else if (js.includes(jsEscReplacement)) {
+  console.log('[INFO] JS Esc key listener already polished.');
+} else {
+  throw new Error('JS Esc target not found');
+}
 
-console.log('Running node --check on bundle...');
-execSync(`node --check "${bundlePath}"`);
-console.log('BUNDLE SYNTAX CHECK: 100% OK!');
+// ==========================================
+// FIX 2: Scribble to erase (Di xoá) button & sensitivity
+// ==========================================
+// Insert "Di xoá" button right next to "=Đều" button in .tb-group.tools
+const deuIdx = js.indexOf('d:"M3 9h18M3 15h18"');
+if (deuIdx === -1) throw new Error('Deu icon not found');
+const deuBtnEndIdx = js.indexOf('})}),shapes:', deuIdx);
+if (deuBtnEndIdx === -1) throw new Error('Deu button end not found');
 
-console.log('Running node --check on pdfimport...');
-execSync(`node --check "${pdfImportPath}"`);
-console.log('PDFIMPORT SYNTAX CHECK: 100% OK!');
+const scratchBtnCode = 'p.jsx(ct,{title:_s?"Di xo\\u00e1: \\u0110ANG B\\u1eacT (t\\u00f4 di qua l\\u1ea1i \\u0111\\u00e8 l\\u00ean ch\\u1eef \\u0111\\u1ec3 xo\\u00e1)":"Di xo\\u00e1: \\u0110ANG T\\u1eaeT (b\\u1ea5m \\u0111\\u1ec3 b\\u1eadt t\\u00f4 di \\u0111\\u00e8 ch\\u1eef \\u0111\\u1ec3 xo\\u00e1)",on:_s,className:_s?"on checked":"",onClick:()=>{const next=!_s;bo(n.scratchEraseNow(next));Au(next)},children:p.jsxs("span",{style:{display:"inline-flex",alignItems:"center",gap:"2px",fontSize:"11px",fontWeight:"700",letterSpacing:"-0.2px"},children:[p.jsx("svg",{width:"14",height:"14",viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2.2",strokeLinecap:"round",strokeLinejoin:"round",children:p.jsx("path",{d:"M3 17l4-8 4 8 4-8 4 8"})}),p.jsx("span",{children:"Di xo\\u00e1"})]})}),';
+
+if (!js.includes('M3 17l4-8 4 8 4-8 4 8')) {
+  js = js.substring(0, deuBtnEndIdx + 4) + scratchBtnCode + js.substring(deuBtnEndIdx + 4);
+  console.log('[OK] Di xoá toolbar button inserted.');
+} else {
+  console.log('[INFO] Di xoá toolbar button already present.');
+}
+
+// PU sensitivity:
+const puTarget = 'return d[0]>=4&&u>=2.5*h||d[1]>=6}';
+const puReplacement = 'return(d[0]>=3&&u>=1.8*h)||(d[0]>=4&&u>=2.5*h)||d[1]>=4}';
+if (js.includes(puTarget)) {
+  js = js.replace(puTarget, puReplacement);
+  console.log('[OK] PU sensitivity enhanced.');
+} else if (js.includes(puReplacement)) {
+  console.log('[INFO] PU sensitivity already enhanced.');
+} else {
+  throw new Error('PU sensitivity target not found');
+}
+
+// EU sensitivity:
+const euTarget = 'u>=.6*c&&r.push(l)';
+const euReplacement = '(u>=.35*c||u>=5)&&r.push(l)';
+if (js.includes(euTarget)) {
+  js = js.replace(euTarget, euReplacement);
+  console.log('[OK] EU sensitivity enhanced.');
+} else if (js.includes(euReplacement)) {
+  console.log('[INFO] EU sensitivity already enhanced.');
+} else {
+  throw new Error('EU sensitivity target not found');
+}
+
+// ==========================================
+// FIX 3: Ink startup latency elimination
+// ==========================================
+// In down(t):
+const downInkTarget = 'stroke:{id:He(),kind:b,color:v.color,width:v.width,pts:[S.x,S.y,k],...this.dashed&&!g?{dashed:!0}:{},...b==="pen"&&!g&&this.pen.type!=="ballpoint"?{pen:this.pen.type}:{},...b==="pen"&&!g&&(this.pen.smooth??1)!==1?{smooth:this.pen.smooth}:{},...b==="highlighter"&&this.highlighter.alpha!==void 0?{alpha:this.highlighter.alpha}:{}}},this.redraw();return}case"select":';
+const downInkReplacement = 'stroke:{id:He(),kind:b,color:v.color,width:v.width,pts:[S.x,S.y,k],...this.dashed&&!g?{dashed:!0}:{},...b==="pen"&&!g&&this.pen.type!=="ballpoint"?{pen:this.pen.type}:{},...b==="pen"&&!g&&(this.pen.smooth??1)!==1?{smooth:this.pen.smooth}:{},...b==="highlighter"&&this.highlighter.alpha!==void 0?{alpha:this.highlighter.alpha}:{}}};if(this.lowLatency&&this.canvas.width&&this.canvas.height){const _wb=this.wetBase??(this.wetBase=document.createElement("canvas"));(_wb.width!==this.canvas.width||_wb.height!==this.canvas.height)&&(_wb.width=this.canvas.width,_wb.height=this.canvas.height);const _wctx=_wb.getContext("2d");_wctx.setTransform(1,0,0,1,0,0),_wctx.drawImage(this.canvas,0,0),this.wetKey=this.viewKey();const _dpr=window.devicePixelRatio||1,_l=this.zoom,_c=x=>Math.round(x*_dpr)/_dpr;this.wetAt={dpr:_dpr,z:_l,left:_c(this.offsetX-this.scroller.scrollLeft),top:_c(this.pageTop(i)*_l-this.scroller.scrollTop)},this.wetN=0,this.needFull=!1,this.paintWet()||this.redraw()}else this.redraw();return}case"select":';
+
+if (js.includes(downInkTarget)) {
+  js = js.replace(downInkTarget, downInkReplacement);
+  console.log('[OK] down(t) 0ms instant ink applied.');
+} else if (js.includes(downInkReplacement)) {
+  console.log('[INFO] down(t) 0ms instant ink already present.');
+} else {
+  throw new Error('down(t) ink target not found');
+}
+
+// In paintSoon():
+const paintSoonTarget = 'paintSoon(){this.lowLatency&&!this.needFull&&performance.now()-this.lastPaint>=5&&this.paintWet()||this.schedule()}';
+const paintSoonReplacement = 'paintSoon(){(this.lowLatency&&!this.needFull&&this.paintWet())||this.schedule()}';
+
+if (js.includes(paintSoonTarget)) {
+  js = js.replace(paintSoonTarget, paintSoonReplacement);
+  console.log('[OK] paintSoon RAF stall eliminated.');
+} else if (js.includes(paintSoonReplacement)) {
+  console.log('[INFO] paintSoon RAF stall already eliminated.');
+} else {
+  throw new Error('paintSoon target not found');
+}
+
+// ==========================================
+// FIX 4: Stylus pen cursor visibility & smoothness
+// ==========================================
+// 1. In mne component: use RAF syncing, debounced boundary check to prevent flickering/jitter
+const mneTarget = 'function mne({kind:e,scale:t,off:n}){const o=q.useRef(null),s=q.useRef(n);s.current=n;const i=e==="pen"||e==="dot"?e:"arrow",r=dne[i];return q.useEffect(()=>{const a=o.current;let l=0;const c=()=>{clearTimeout(l),a.style.display="none"},u=g=>{if(g.pointerType==="pen"){if(clearTimeout(l),s.current||g.buttons&32||g.button===5)return c();const evs=g.getCoalescedEvents?g.getCoalescedEvents():null,last=evs&&evs.length?evs[evs.length-1]:g;a.style.display="block",a.style.transform=`translate3d(${last.clientX-r.x*t}px, ${last.clientY-r.y*t}px, 0)`}},h=g=>{g.pointerType==="pen"&&(clearTimeout(l),l=window.setTimeout(c,pne))},d=g=>{g.pointerType==="pen"&&!g.relatedTarget&&c()},f={capture:!0,passive:!0};return window.addEventListener("pointerdown",u,f),window.addEventListener("pointermove",u,f),"onpointerrawupdate"in window&&window.addEventListener("pointerrawupdate",u,f),window.addEventListener("pointerup",h,f),window.addEventListener("pointercancel",c,f),window.addEventListener("pointerout",d,f),()=>{clearTimeout(l),window.removeEventListener("pointerdown",u,f),window.removeEventListener("pointermove",u,f),"onpointerrawupdate"in window&&window.removeEventListener("pointerrawupdate",u,f),window.removeEventListener("pointerup",h,f),window.removeEventListener("pointercancel",c,f),window.removeEventListener("pointerout",d,f)}},[r,t]),q.useEffect(()=>{n&&o.current&&(o.current.style.display="none")},[n]),p.jsx("div",{ref:o,className:"tablet-cursor",style:{width:r.size*t,height:r.size*t,backgroundImage:`url("data:image/svg+xml,${encodeURIComponent(hne[i])}")`}})}';
+
+const mneReplacement = 'function mne({kind:e,scale:t,off:n}){const o=q.useRef(null),s=q.useRef(n);s.current=n;const i=e==="pen"||e==="dot"?e:"arrow",r=dne[i];return q.useEffect(()=>{const a=o.current;if(!a)return;let l=0,rafId=0,px=-100,py=-100;const c=()=>{clearTimeout(l),rafId&&(cancelAnimationFrame(rafId),rafId=0),a.style.display="none"},sync=()=>{rafId=0,a.style.display!=="block"&&(a.style.display="block"),a.style.transform=`translate3d(${px-r.x*t}px, ${py-r.y*t}px, 0)`},u=g=>{if(g.pointerType==="pen"){clearTimeout(l);if(s.current||g.buttons&32||g.button===5)return c();const evs=g.getCoalescedEvents?g.getCoalescedEvents():null,last=evs&&evs.length?evs[evs.length-1]:g;px=last.clientX,py=last.clientY,rafId||(rafId=requestAnimationFrame(sync))}},h=g=>{g.pointerType==="pen"&&(clearTimeout(l),l=window.setTimeout(c,pne))},d=g=>{if(g.pointerType==="pen"&&(g.clientX<=0||g.clientY<=0||g.clientX>=window.innerWidth||g.clientY>=window.innerHeight)){clearTimeout(l),l=window.setTimeout(c,200)}},f={capture:!0,passive:!0};return window.addEventListener("pointerdown",u,f),window.addEventListener("pointermove",u,f),"onpointerrawupdate"in window&&window.addEventListener("pointerrawupdate",u,f),window.addEventListener("pointerup",h,f),window.addEventListener("pointercancel",c,f),window.addEventListener("pointerout",d,f),()=>{clearTimeout(l),rafId&&(cancelAnimationFrame(rafId),rafId=0),window.removeEventListener("pointerdown",u,f),window.removeEventListener("pointermove",u,f),"onpointerrawupdate"in window&&window.removeEventListener("pointerrawupdate",u,f),window.removeEventListener("pointerup",h,f),window.removeEventListener("pointercancel",c,f),window.removeEventListener("pointerout",d,f)}},[r,t]),q.useEffect(()=>{n&&o.current&&(o.current.style.display="none")},[n]),p.jsx("div",{ref:o,className:"tablet-cursor",style:{width:r.size*t,height:r.size*t,backgroundImage:`url("data:image/svg+xml,${encodeURIComponent(hne[i])}")`}})}';
+
+if (js.includes(mneTarget)) {
+  js = js.replace(mneTarget, mneReplacement);
+  console.log('[OK] mne RAF & boundary handling applied.');
+} else if (js.includes(mneReplacement)) {
+  console.log('[INFO] mne RAF & boundary handling already present.');
+} else {
+  throw new Error('mne target not found');
+}
+
+// 2. Render mne on desktop (remove e.mobile requirement)
+const mneRender = 'e.mobile&&dm&&p.jsx(mne,{kind:Cu,scale:ir,off:a.k==="eraser"})';
+const mneRenderReplacement = 'dm&&p.jsx(mne,{kind:Cu,scale:ir,off:a.k==="eraser"})';
+if (js.includes(mneRender)) {
+  js = js.replace(mneRender, mneRenderReplacement);
+  console.log('[OK] mne rendered on desktop.');
+} else if (js.includes(mneRenderReplacement)) {
+  console.log('[INFO] mne already rendered on desktop.');
+} else {
+  throw new Error('mne render target not found');
+}
+
+// 3. Default dm state to true (c.tabletCursor ?? !0)
+const dmStateTarget = '[dm,pm]=q.useState(c.tabletCursor??!1)';
+const dmStateReplacement = '[dm,pm]=q.useState(c.tabletCursor??!0)';
+if (js.includes(dmStateTarget)) {
+  js = js.replace(dmStateTarget, dmStateReplacement);
+  console.log('[OK] dm state defaults to true.');
+} else if (js.includes(dmStateReplacement)) {
+  console.log('[INFO] dm state already defaults to true.');
+} else {
+  throw new Error('dm state target not found');
+}
+
+// 4. In settings modal, pass tabletCursor: dm for desktop too
+const settingsTabletTarget = 'tabletCursor:e.mobile?dm:void 0';
+const settingsTabletReplacement = 'tabletCursor:dm';
+if (js.includes(settingsTabletTarget)) {
+  js = js.replace(settingsTabletTarget, settingsTabletReplacement);
+  console.log('[OK] Settings modal tabletCursor visible on desktop.');
+} else if (js.includes(settingsTabletReplacement)) {
+  console.log('[INFO] Settings modal tabletCursor already visible on desktop.');
+} else {
+  throw new Error('settings tabletCursor prop target not found');
+}
+
+// Write back files
+fs.writeFileSync(cssPath, css, 'utf8');
+fs.writeFileSync(jsPath, js, 'utf8');
+console.log('Successfully written updated files! CSS:', css.length, 'JS:', js.length);

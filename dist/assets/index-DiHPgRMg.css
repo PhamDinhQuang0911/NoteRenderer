@@ -1373,8 +1373,22 @@ body.nr-fullscreen .work {
   height: 100% !important;
   max-height: 100vh !important;
 }
+body.nr-fullscreen .toolbar .tb-group:not(.tools),
+body.nr-fullscreen .toolbar .tb-group.actions,
+body.nr-fullscreen .toolbar .rec-bar,
+body.nr-fullscreen .toolbar .tb-rec-dot,
+body.nr-fullscreen .toolbar .toolbar-recording-btn,
 body.nr-fullscreen .toolbar .tb-title {
   display: none !important;
+}
+body.nr-fullscreen .toolbar {
+  justify-content: center !important;
+}
+body.nr-fullscreen .toolbar .tb-group.tools {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  justify-content: center !important;
+  margin: 0 auto !important;
 }
 .rec-quality-select {
   height: 30px !important;
