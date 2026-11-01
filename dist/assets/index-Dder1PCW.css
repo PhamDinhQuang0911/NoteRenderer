@@ -1137,14 +1137,80 @@ body.dark .quicknote-card span {
   right: 20px !important;
   bottom: 24px !important;
   z-index: 10000 !important;
-  width: 340px !important;
+  width: 440px !important;
   max-width: calc(100vw - 32px) !important;
   background: #ffffff !important;
-  border: 1.5px solid #3b82f6 !important;
-  border-radius: 12px !important;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2) !important;
-  padding: 14px !important;
-  animation: slideInUp .25s ease-out !important;
+  border: 1.5px solid #2563eb !important;
+  border-radius: 16px !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.25) !important;
+  padding: 16px 18px !important;
+  animation: slideInUp .25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+.tg-bots-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  margin-top: 12px !important;
+  padding-top: 10px !important;
+  border-top: 1px solid #e2e8f0 !important;
+  max-height: 280px !important;
+  overflow-y: auto !important;
+}
+.tg-bot-row {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+}
+.tg-bot-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  font-size: 11.5px !important;
+  line-height: 1.3 !important;
+}
+.tg-bot-name {
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+.tg-bot-status {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+.tg-bot-status.uploading {
+  color: #2563eb !important;
+}
+.tg-bot-status.done {
+  color: #16a34a !important;
+}
+.tg-bot-status.idle {
+  color: #94a3b8 !important;
+}
+.tg-bot-status.error {
+  color: #dc2626 !important;
+}
+.tg-bot-bar {
+  width: 100% !important;
+  height: 6px !important;
+  background: #e2e8f0 !important;
+  border-radius: 3px !important;
+  overflow: hidden !important;
+}
+.tg-bot-fill {
+  height: 100% !important;
+  background: linear-gradient(90deg, #3b82f6, #06b6d4) !important;
+  border-radius: 3px !important;
+  transition: width .2s ease !important;
+}
+.tg-bot-fill.done {
+  background: #16a34a !important;
 }
 .tg-upload-head {
   display: flex !important;
