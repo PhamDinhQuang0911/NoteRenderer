@@ -1,4 +1,4 @@
-const CACHE_NAME = "nr-cache-v075-tb-mvxdideq";
+const CACHE_NAME = "nr-cache-v075-tg-upgrades-v1";
 const PRECACHE_ASSETS = [
   './favicon.png',
   './manifest.webmanifest'
