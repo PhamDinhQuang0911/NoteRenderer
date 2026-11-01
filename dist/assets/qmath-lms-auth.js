@@ -1851,8 +1851,13 @@
     let existingModal = document.getElementById('qmath-save-lesson-modal');
     if (existingModal) existingModal.remove();
 
-    const rawDoc = window.__NR_EDITOR.doc;
-    const currentVideo = rawDoc.telegramVideo || rawDoc.lectureVideo || currentLoadedLesson?.video || null;
+    const rawDoc = (window.__NR_EDITOR && window.__NR_EDITOR.doc) || {};
+    let currentVideo = rawDoc.telegramVideo || rawDoc.lectureVideo || window.__CURRENT_LECTURE_VIDEO || (() => {
+      try {
+        const s = localStorage.getItem('nr_last_video');
+        return s ? JSON.parse(s) : null;
+      } catch(_) { return null; }
+    })() || currentLoadedLesson?.video || null;
     let attachedMaterials = Array.isArray(currentLoadedLesson?.materials) ? [...currentLoadedLesson.materials] : [];
 
     const modal = document.createElement('div');
@@ -1920,27 +1925,41 @@
           </div>
 
           <!-- VIDEO STATUS BOX 1:1 -->
-          <div style="margin-bottom:14px;padding:12px;border-radius:12px;border:1.5px solid ${currentVideo ? '#bbf7d0' : '#e2e8f0'};background:${currentVideo ? '#f0fdf4' : '#f8fafc'};">
+          <div id="qm-video-status-container" style="margin-bottom:14px;padding:12px;border-radius:12px;border:1.5px solid ${currentVideo ? '#bbf7d0' : (window.__TG_UPLOADING ? '#fde68a' : '#e2e8f0')};background:${currentVideo ? '#f0fdf4' : (window.__TG_UPLOADING ? '#fffbeb' : '#f8fafc')};">
             <div style="display:flex;align-items:center;justify-content:space-between;">
-              <span style="font-weight:700;color:${currentVideo ? '#15803d' : '#475569'};font-size:12.5px;">
+              <span style="font-weight:700;color:${currentVideo ? '#15803d' : (window.__TG_UPLOADING ? '#b45309' : '#475569')};font-size:12.5px;">
                 🎬 Video bài giảng đi kèm (Tỷ lệ 1:1):
               </span>
               ${currentVideo ? `
-                <span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">ĐÃ SẴN SÀNG</span>
+                <span id="qm-vid-badge" style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">ĐÃ SẴN SÀNG</span>
+              ` : (window.__TG_UPLOADING ? `
+                <span id="qm-vid-badge" style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">ĐANG TẢI LÊN KHO</span>
               ` : `
-                <span style="background:#94a3b8;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;">CHƯA QUAY</span>
-              `}
+                <span id="qm-vid-badge" style="background:#94a3b8;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;">CHƯA CÓ VIDEO</span>
+              `)}
             </div>
+            <div id="qm-vid-info-body">
             ${currentVideo ? `
-              <div style="margin-top:6px;font-size:12px;color:#166534;font-weight:600;">
-                ▶ ${currentVideo.title || 'Video bài giảng'} (${currentVideo.duration ? formatDuration(currentVideo.duration) : ''}${currentVideo.size ? ' • ' + (currentVideo.size / (1024*1024)).toFixed(1) + ' MB' : ''})
+              <div style="margin-top:6px;font-size:12px;color:#166534;font-weight:600;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+                <span>▶ ${currentVideo.title || 'Video bài giảng'} (${currentVideo.duration ? formatDuration(currentVideo.duration) : ''}${currentVideo.size ? ' • ' + (currentVideo.size / (1024*1024)).toFixed(1) + ' MB' : ''})</span>
+                <div style="display:flex;gap:6px;">
+                  ${(currentVideo.tmeUrl || currentVideo.streamUrl) ? `<a href="${currentVideo.tmeUrl || currentVideo.streamUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;font-size:11.5px;font-weight:700;background:#eff6ff;padding:2px 6px;border-radius:6px;border:1px solid #bfdbfe;">Xem thử ↗</a>` : ''}
+                  <button type="button" id="qm-btn-remove-video" style="background:#fee2e2;border:1px solid #fecaca;color:#dc2626;padding:2px 6px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">Đổi / Gỡ</button>
+                </div>
+              </div>
+            ` : (window.__TG_UPLOADING ? `
+              <div style="margin-top:6px;font-size:12px;color:#92400e;font-weight:600;">
+                ⏳ Đang tải video lên Kho Lưu Trữ (${window.__TG_UPLOADING.progress || 0}%)... Video sẽ tự động được gán vào bài giảng này!
               </div>
             ` : `
               <div style="margin-top:6px;font-size:12px;color:#64748b;">
                 Chưa có video. Bạn có thể bấm nút [🎬] trên thanh công cụ để ghi hình hoặc dán link video kho lưu trữ vào đây:
-                <input id="qm-save-manual-video" type="text" placeholder="Dán link video kho lưu trữ..." style="margin-top:6px;width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px;" />
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                  <input id="qm-save-manual-video" type="text" placeholder="Dán link video kho lưu trữ (https://t.me/... hoặc link trực tiếp)" style="flex:1;box-sizing:border-box;padding:7px 10px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:12px;" />
+                </div>
               </div>
-            `}
+            `)}
+            </div>
           </div>
 
           <!-- MATERIALS ATTACHMENT SECTION -->
@@ -1997,7 +2016,58 @@
     document.getElementById('qm-save-summary').value = currentLoadedLesson?.summary || '';
     document.getElementById('qm-save-allow-pdf').checked = currentLoadedLesson?.allowStudentPdf !== false;
 
-    document.getElementById('qm-save-close').onclick = () => modal.remove();
+    document.getElementById('qm-save-close').onclick = () => { modal.remove(); window.__QM_UPDATE_VIDEO_UI = null; };
+    document.getElementById('qm-save-cancel').onclick = () => { modal.remove(); window.__QM_UPDATE_VIDEO_UI = null; };
+
+    const setupVidRemoveBtn = () => {
+      const rmBtn = document.getElementById('qm-btn-remove-video');
+      if (rmBtn) {
+        rmBtn.onclick = () => {
+          currentVideo = null;
+          window.__CURRENT_LECTURE_VIDEO = null;
+          if (rawDoc) rawDoc.telegramVideo = null;
+          const cont = document.getElementById('qm-video-status-container');
+          if (cont) {
+            cont.style.border = '1.5px solid #e2e8f0';
+            cont.style.background = '#f8fafc';
+            cont.innerHTML = `
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-weight:700;color:#475569;font-size:12.5px;">🎬 Video bài giảng đi kèm (Tỷ lệ 1:1):</span>
+                <span style="background:#94a3b8;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;">CHƯA CÓ VIDEO</span>
+              </div>
+              <div style="margin-top:6px;font-size:12px;color:#64748b;">
+                Đã gỡ video. Bạn có thể dán link video mới vào đây:
+                <input id="qm-save-manual-video" type="text" placeholder="Dán link video kho lưu trữ..." style="margin-top:6px;width:100%;box-sizing:border-box;padding:7px 10px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:12px;" />
+              </div>
+            `;
+          }
+        };
+      }
+    };
+    setupVidRemoveBtn();
+
+    window.__QM_UPDATE_VIDEO_UI = (newVid) => {
+      currentVideo = newVid;
+      const cont = document.getElementById('qm-video-status-container');
+      if (cont && newVid) {
+        cont.style.border = '1.5px solid #bbf7d0';
+        cont.style.background = '#f0fdf4';
+        cont.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-weight:700;color:#15803d;font-size:12.5px;">🎬 Video bài giảng đi kèm (Tỷ lệ 1:1):</span>
+            <span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">ĐÃ SẴN SÀNG</span>
+          </div>
+          <div style="margin-top:6px;font-size:12px;color:#166534;font-weight:600;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+            <span>▶ ${newVid.title || 'Video bài giảng'} (${newVid.duration ? formatDuration(newVid.duration) : ''}${newVid.size ? ' • ' + (newVid.size / (1024*1024)).toFixed(1) + ' MB' : ''})</span>
+            <div style="display:flex;gap:6px;">
+              ${(newVid.tmeUrl || newVid.streamUrl) ? `<a href="${newVid.tmeUrl || newVid.streamUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;font-size:11.5px;font-weight:700;background:#eff6ff;padding:2px 6px;border-radius:6px;border:1px solid #bfdbfe;">Xem thử ↗</a>` : ''}
+              <button type="button" id="qm-btn-remove-video" style="background:#fee2e2;border:1px solid #fecaca;color:#dc2626;padding:2px 6px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">Đổi / Gỡ</button>
+            </div>
+          </div>
+        `;
+        setupVidRemoveBtn();
+      }
+    };
     document.getElementById('qm-save-cancel').onclick = () => modal.remove();
     document.getElementById('qm-btn-export-local-pdf').onclick = () => exportCurrentNoteToPdf();
 
