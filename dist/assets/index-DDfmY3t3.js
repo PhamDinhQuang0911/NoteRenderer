@@ -3542,117 +3542,179 @@ const TelegramLectureService = {
 
   async uploadVideo({ botToken, botTokens, chatId, blob, filename, caption, onProgress, signal }) {
     const tokenPool = (botTokens && botTokens.length) ? botTokens : TelegramLectureService.getBotTokens({ botToken, botTokens });
-    const primaryToken = tokenPool[Math.floor(Math.random() * tokenPool.length)] || tokenPool[0];
-    const baseTitle = filename.replace(/\.[^/.]+$/, "");
+    const CHUNK_SIZE = 14.5 * 1024 * 1024; // 14.5 MB: An toàn tuyệt đối dưới ngưỡng 20MB getFile và 50MB upload
+    const totalChunks = Math.ceil(blob.size / CHUNK_SIZE);
+    const chunkResults = new Array(totalChunks);
+    const loadedPerChunk = new Array(totalChunks).fill(0);
+    const activeBots = new Map();
+
     const ext = filename.split(".").pop() || "mp4";
-    const videoId = "vid_" + Date.now() + "_" + Math.random().toString(36).substring(2, 8);
-    const r2Key = "videos/" + videoId + "." + ext;
-    const streamUrl = "https://pub-2efc95bbe7924897bdd0db54d0da243f.r2.dev/" + r2Key;
+    const baseTitle = filename.replace(/\.[^/.]+$/, "");
 
-    if (onProgress) onProgress(5, 0, blob.size, 0, 1, "Bắt đầu tải lên Đám Mây...");
+    // Đa luồng: tối đa 4 luồng song song luân phiên qua danh sách bot
+    const concurrency = Math.max(1, Math.min(tokenPool.length, totalChunks, 4));
+    const queue = Array.from({ length: totalChunks }, (_, i) => i);
 
-    // 1. Tải toàn vẹn video lên Cloudflare R2 (Hà Nội / TP.HCM Edge CDN)
-    await new Promise((resolveUpload, rejectUpload) => {
-      if (signal && signal.aborted) return rejectUpload(new Error("Đã hủy tải lên."));
-
-      const fd = new FormData();
-      fd.append("file", blob, r2Key);
-
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", "https://upload-helper.phamngockhanh-942001.workers.dev/");
-
-      if (signal) {
-        signal.addEventListener("abort", () => {
-          xhr.abort();
-          rejectUpload(new Error("Đã hủy tải lên."));
-        }, { once: true });
+    const updateAggregateProgress = () => {
+      const totalLoaded = loadedPerChunk.reduce((a, b) => a + b, 0);
+      const percent = Math.min(99, Math.round((totalLoaded / blob.size) * 100));
+      const completedCount = chunkResults.filter(Boolean).length;
+      const runningBots = Array.from(activeBots.values()).join(", ");
+      if (onProgress) {
+        onProgress(percent, totalLoaded, blob.size, completedCount, totalChunks, runningBots || ("Đa luồng (" + concurrency + " Bot)"));
       }
+    };
 
-      if (xhr.upload) {
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable && onProgress) {
-            const pct = Math.min(88, Math.max(5, Math.round((e.loaded / e.total) * 88)));
-            onProgress(pct, e.loaded, e.total, 0, 1, "Đang truyền tải video lên CDN tốc độ cao...");
+    const uploadSingleChunk = (chunkIndex, workerId) => {
+      return new Promise((resolveChunk, rejectChunk) => {
+        if (signal && signal.aborted) return rejectChunk(new Error("Đã hủy tải lên."));
+
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(blob.size, start + CHUNK_SIZE);
+        const chunkBlob = blob.slice(start, end, "video/mp4");
+        const partNum = String(chunkIndex + 1).padStart(2, "0");
+        const chunkName = totalChunks > 1 ? (baseTitle + "_Phan_" + partNum + "_tren_" + totalChunks + "." + ext) : filename;
+
+        const botIdx = (workerId !== undefined ? workerId : chunkIndex) % tokenPool.length;
+        const currentToken = tokenPool[botIdx];
+        const botShort = "Bot #" + (botIdx + 1);
+        activeBots.set(workerId, botShort);
+
+        const formData = new FormData();
+        formData.append("chat_id", chatId);
+        formData.append("video", chunkBlob, chunkName);
+        formData.append("supports_streaming", "true");
+
+        if (totalChunks > 1) {
+          formData.append("caption", "🎬 " + baseTitle + "\n📌 Phân đoạn: Phần " + (chunkIndex + 1) + "/" + totalChunks + "\n📅 Ngày ghi: " + new Date().toLocaleString("vi-VN"));
+        } else {
+          formData.append("caption", (caption ? (caption + "\n") : "") + "🎬 " + baseTitle + "\n📅 Ngày ghi: " + new Date().toLocaleString("vi-VN"));
+        }
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "https://api.telegram.org/bot" + currentToken + "/sendVideo");
+
+        if (signal) {
+          signal.addEventListener("abort", () => {
+            xhr.abort();
+            rejectChunk(new Error("Đã hủy tải lên."));
+          }, { once: true });
+        }
+
+        if (xhr.upload) {
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              loadedPerChunk[chunkIndex] = e.loaded;
+              updateAggregateProgress();
+            }
+          };
+        }
+
+        xhr.onload = () => {
+          activeBots.delete(workerId);
+          loadedPerChunk[chunkIndex] = chunkBlob.size;
+          updateAggregateProgress();
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (data.ok && data.result) {
+              resolveChunk(data.result);
+            } else {
+              // Nếu sendVideo thất bại, thử lại dạng sendDocument
+              const docFormData = new FormData();
+              docFormData.append("chat_id", chatId);
+              docFormData.append("document", chunkBlob, chunkName);
+              docFormData.append("caption", "🎬 " + baseTitle + (totalChunks > 1 ? (" (Phần " + (chunkIndex + 1) + "/" + totalChunks + ")") : ""));
+
+              fetch("https://api.telegram.org/bot" + currentToken + "/sendDocument", { method: "POST", body: docFormData })
+                .then(r => r.json())
+                .then(docData => {
+                  if (docData.ok && docData.result) resolveChunk(docData.result);
+                  else rejectChunk(new Error((data.description || docData.description || ("Lỗi gửi phần " + (chunkIndex + 1) + "/" + totalChunks)) + " (" + botShort + ")"));
+                })
+                .catch(docErr => rejectChunk(docErr));
+            }
+          } catch (err) {
+            rejectChunk(new Error("Phản hồi không hợp lệ từ Telegram: " + xhr.status + " (" + botShort + ")"));
           }
         };
+
+        xhr.onerror = () => {
+          activeBots.delete(workerId);
+          rejectChunk(new Error("Lỗi kết nối mạng khi tải phần " + (chunkIndex + 1) + "/" + totalChunks + " (" + botShort + ")"));
+        };
+
+        xhr.send(formData);
+      });
+    };
+
+    // Worker loop với stagger delay chống rate limit
+    const runWorker = async (workerId) => {
+      if (workerId > 0) {
+        await new Promise(r => setTimeout(r, workerId * 350));
       }
 
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolveUpload();
-        } else {
-          rejectUpload(new Error("Lỗi máy chủ tải lên (" + xhr.status + "): " + xhr.responseText));
+      while (queue.length > 0) {
+        if (signal && signal.aborted) throw new Error("Đã hủy tải lên.");
+        const chunkIndex = queue.shift();
+        const res = await uploadSingleChunk(chunkIndex, workerId);
+        chunkResults[chunkIndex] = res;
+
+        if (queue.length > 0) {
+          await new Promise(r => setTimeout(r, 200));
         }
-      };
+      }
+    };
 
-      xhr.onerror = () => {
-        rejectUpload(new Error("Không thể kết nối máy chủ CDN. Vui lòng kiểm tra đường truyền mạng!"));
-      };
+    const workers = [];
+    for (let w = 0; w < concurrency; w++) {
+      workers.push(runWorker(w));
+    }
+    await Promise.all(workers);
 
-      xhr.send(fd);
-    });
-
-    if (onProgress) onProgress(90, blob.size, blob.size, 1, 1, "Đồng bộ Kho Lưu Trữ Telegram...");
-
-    // 2. Đồng bộ sang Telegram Channel (để lưu trữ và phát trực tiếp)
+    const chunks = [];
     let firstMessageId = null;
     let chatUsername = "";
-    let tgFileId = "";
 
-    try {
-      const isUnder50MB = blob.size <= 49.5 * 1024 * 1024;
-      if (isUnder50MB) {
-        const tgFd = new FormData();
-        tgFd.append("chat_id", chatId);
-        tgFd.append("video", blob, filename);
-        tgFd.append("caption", (caption ? (caption + "\n\n") : "") + "🎬 Xem bài giảng trực tiếp: " + streamUrl);
-        tgFd.append("supports_streaming", "true");
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkRes = chunkResults[i];
+      if (!chunkRes) throw new Error("Thiếu dữ liệu phần " + (i + 1));
+      const doc = chunkRes.video || chunkRes.document;
+      const fileId = doc?.file_id;
+      if (!fileId) throw new Error("Không nhận được file_id của phần " + (i + 1));
 
-        const tgRes = await fetch("https://api.telegram.org/bot" + primaryToken + "/sendVideo", {
-          method: "POST",
-          body: tgFd,
-          signal: signal
-        });
-        const tgData = await tgRes.json().catch(() => ({}));
-        if (tgData.ok && tgData.result) {
-          firstMessageId = tgData.result.message_id;
-          chatUsername = tgData.result.chat?.username || "";
-          tgFileId = tgData.result.video?.file_id || "";
-        }
-      } else {
-        const msgText = "🎬 <b>" + baseTitle + "</b>\n\n📌 <i>Video bài giảng (" + (blob.size / (1024 * 1024)).toFixed(1) + " MB) đã được lưu trữ an toàn trên CDN tốc độ cao.</i>\n\n🔗 <b>Xem bài giảng:</b> " + streamUrl;
-        const tgRes = await fetch("https://api.telegram.org/bot" + primaryToken + "/sendMessage", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: msgText,
-            parse_mode: "HTML"
-          }),
-          signal: signal
-        });
-        const tgData = await tgRes.json().catch(() => ({}));
-        if (tgData.ok && tgData.result) {
-          firstMessageId = tgData.result.message_id;
-          chatUsername = tgData.result.chat?.username || "";
-        }
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(blob.size, start + CHUNK_SIZE);
+      chunks.push({
+        index: i,
+        fileId: fileId,
+        size: end - start,
+        start: start,
+        end: end,
+        botIndex: i % tokenPool.length,
+        part: i + 1,
+        totalParts: totalChunks
+      });
+
+      if (i === 0) {
+        firstMessageId = chunkRes.message_id;
+        chatUsername = chunkRes.chat?.username || "";
       }
-    } catch (tgErr) {
-      console.warn("Lưu trữ Telegram cảnh báo:", tgErr);
     }
+
+    if (onProgress) onProgress(100, blob.size, blob.size, totalChunks, totalChunks, "Hoàn tất");
+
+    const videoId = "tg_video_" + Date.now();
 
     let tmeUrl = "";
-    if (chatUsername && firstMessageId) {
+    if (chatUsername) {
       tmeUrl = "https://t.me/" + chatUsername + "/" + firstMessageId;
-    } else if (String(chatId).startsWith("-100") && firstMessageId) {
+    } else if (String(chatId).startsWith("-100")) {
       tmeUrl = "https://t.me/c/" + String(chatId).replace(/^-100/, "") + "/" + firstMessageId;
-    } else if (String(chatId).startsWith("@") && firstMessageId) {
-      tmeUrl = "https://t.me/" + String(chatId).slice(1) + (firstMessageId ? ("/" + firstMessageId) : "");
+    } else if (String(chatId).startsWith("@")) {
+      tmeUrl = "https://t.me/" + String(chatId).slice(1) + "/" + firstMessageId;
     }
 
-    if (onProgress) onProgress(98, blob.size, blob.size, 1, 1, "Đang lưu thông tin bài giảng...");
-
-    // 3. Đồng bộ Supabase metadata
+    // Đồng bộ Supabase metadata
     try {
       await fetch("https://cuniqanbumcrqcdlcvad.supabase.co/rest/v1/configurations?on_conflict=id", {
         method: "POST",
@@ -3664,18 +3726,19 @@ const TelegramLectureService = {
         body: JSON.stringify({
           id: videoId,
           raw_data: {
-            type: "r2_stream",
+            type: "telegram_chunked",
             title: baseTitle,
             filename: filename,
             ext: ext,
             mimeType: blob.type || (filename.endsWith(".mp4") ? "video/mp4" : "video/webm"),
             totalSize: blob.size,
-            fileId: tgFileId || videoId,
+            chunkSize: CHUNK_SIZE,
+            chunkCount: chunks.length,
+            chunks: chunks,
+            fileId: chunks[0].fileId,
             messageId: firstMessageId,
             channel: (chatId || "").replace(/^@/, ""),
-            streamUrl: streamUrl,
-            content: streamUrl,
-            tmeUrl: tmeUrl || streamUrl,
+            tmeUrl: tmeUrl,
             createdAt: new Date().toISOString()
           },
           updated_at: new Date().toISOString()
@@ -3685,21 +3748,18 @@ const TelegramLectureService = {
       console.warn("Supabase auto-sync failed:", e);
     }
 
-    if (onProgress) onProgress(100, blob.size, blob.size, 1, 1, "Hoàn tất");
-
     return {
       ok: !0,
       videoId: videoId,
-      fileId: tgFileId || videoId,
+      fileId: chunks[0].fileId,
       messageId: firstMessageId,
       chatId: String(chatId),
       chatUsername: chatUsername,
-      tmeUrl: tmeUrl || streamUrl,
-      streamUrl: streamUrl,
-      content: streamUrl,
+      tmeUrl: tmeUrl,
       size: blob.size,
-      chunkCount: 1,
-      isChunked: !1
+      chunks: chunks,
+      chunkCount: chunks.length,
+      isChunked: chunks.length > 1
     };
   }
 };
