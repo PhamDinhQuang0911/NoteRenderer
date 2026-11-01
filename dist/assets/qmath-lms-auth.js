@@ -203,6 +203,17 @@
       pill.style.borderColor = '#e2e8f0';
       pill.innerHTML = `<span>📝</span> <span>Bảng mới</span>`;
     }
+
+    const btnVideo = document.getElementById('qmath-btn-view-video');
+    if (btnVideo) {
+      const vid = currentLoadedLesson?.video || (window.__NR_EDITOR?.doc?.telegramVideo);
+      if (vid) {
+        btnVideo.style.display = 'flex';
+        btnVideo.onclick = () => openVideoPlayerModal(vid, currentLoadedLesson?.title || document.title);
+      } else {
+        btnVideo.style.display = 'none';
+      }
+    }
   }
 
   // =========================================================
@@ -2908,6 +2919,13 @@
     const lock = document.getElementById('qmath-lock-overlay');
     if (lock) lock.remove();
 
+    const isInIframe = window.self !== window.top;
+    if (isInIframe || activeContext.viewMode) {
+      // In viewer mode or inside LMS iframe, do not show qmath-badge-bar to keep bottom clean and prevent overlapping Trang 1/2
+      applyStudentViewerMode();
+      return;
+    }
+
     const isTeacher = userRole === 'teacher' || userRole === 'admin' || userRole === 'super_admin';
     const roleTitle = isTeacher ? '👨‍🏫' : '🎓';
     const badgeBg = isTeacher ? 'background: linear-gradient(135deg,#2563eb,#4f46e5);' : 'background: #0284c7;';
@@ -2939,9 +2957,15 @@
           <button id="qmath-btn-export-pdf" title="Xuất bài giảng hiện tại ra file PDF" style="background:#fff;border:1px solid #cbd5e1;color:#1e293b;padding:3px 9px;border-radius:999px;font-weight:700;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;">
             <span>📄</span> Xuất PDF
           </button>
+          <button id="qmath-btn-view-video" title="Xem video bài giảng" style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);border:none;color:#fff;padding:3px 9px;border-radius:999px;font-weight:800;font-size:11px;cursor:pointer;align-items:center;gap:3px;box-shadow:0 2px 6px rgba(22,163,74,0.3);">
+            <span>▶</span> Xem video
+          </button>
         ` : `
           <button id="qmath-btn-export-pdf" title="Tải bài giảng ra file PDF" style="background:#fff;border:1px solid #cbd5e1;color:#1e293b;padding:3px 9px;border-radius:999px;font-weight:700;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;">
             <span>📄</span> Tải PDF
+          </button>
+          <button id="qmath-btn-view-video" title="Xem video bài giảng" style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);border:none;color:#fff;padding:3px 9px;border-radius:999px;font-weight:800;font-size:11px;cursor:pointer;align-items:center;gap:3px;box-shadow:0 2px 6px rgba(22,163,74,0.3);">
+            <span>▶</span> Xem video
           </button>
         `}
 
@@ -2980,6 +3004,17 @@
 
     const btnPdf = document.getElementById('qmath-btn-export-pdf');
     if (btnPdf) btnPdf.onclick = exportCurrentNoteToPdf;
+
+    const btnVideo = document.getElementById('qmath-btn-view-video');
+    if (btnVideo) {
+      const vid = currentLoadedLesson?.video || (window.__NR_EDITOR?.doc?.telegramVideo);
+      if (vid) {
+        btnVideo.style.display = 'flex';
+        btnVideo.onclick = () => openVideoPlayerModal(vid, currentLoadedLesson?.title || document.title);
+      } else {
+        btnVideo.style.display = 'none';
+      }
+    }
 
     const btnCollapse = document.getElementById('qmath-btn-collapse');
     if (btnCollapse) {
