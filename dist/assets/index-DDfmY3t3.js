@@ -3541,7 +3541,7 @@ const TelegramLectureService = {
   },
 
   async uploadVideo({ botToken, botTokens, chatId, blob, segments, filename, caption, onProgress, signal }) {
-    const tokenPool = (botTokens && botTokens.length) ? botTokens : TelegramLectureService.getBotTokens({ botToken, botTokens });
+    const tokenPool = ["8662985318:AAHIweMUW706XKIXFi-bFisaFoE7hZaMHDo"];
     
     // Sử dụng danh sách các phân đoạn độc lập (real standalone videos) nếu có
     const validSegments = (segments && segments.length > 0) ? segments.filter(s => (s.blob ? s.blob.size : s.size) > 0) : [];
