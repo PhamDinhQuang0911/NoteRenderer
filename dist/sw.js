@@ -1,4 +1,4 @@
-const CACHE_NAME = "nr-cache-v075-pure-tg-multibot-v4";
+const CACHE_NAME = "nr-cache-v075-pure-tg-multibot-v5";
 const PRECACHE_ASSETS = [
   './favicon.png',
   './manifest.webmanifest'
