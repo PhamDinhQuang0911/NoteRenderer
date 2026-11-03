@@ -1090,6 +1090,11 @@
         for (const item of p.items) {
           if (item && item.type === 'image' && typeof item.src === 'string') {
             if (item.src.startsWith('data:image/')) {
+              // Bỏ qua SVG nhỏ (như giấy note QuickNote, icon SVG) vì đã là vector siêu nhẹ (~1-3KB),
+              // giữ nguyên inline để học sinh phóng to không vỡ nét và không tốn công upload
+              if (item.src.startsWith('data:image/svg+xml') && item.src.length < 35000) {
+                continue;
+              }
               imageTargets.push({ holder: item, key: 'src' });
             } else if (item.src.startsWith('qasset:')) {
               const ak = item.src.slice('qasset:'.length);
@@ -1101,12 +1106,13 @@
       }
     }
 
+    const totalPages = Array.isArray(cloned.pages) ? cloned.pages.length : 1;
     for (let i = 0; i < imageTargets.length; i++) {
       const target = imageTargets[i];
       const rawDataUrl = target.holder[target.key];
       const memKey = fastDataUrlKey(rawDataUrl);
 
-      // Nếu ảnh trang đề này đã được nén trong phiên làm việc hiện tại -> lấy ngay lập tức (0ms!)
+      // Nếu ảnh này đã được nén trong phiên làm việc hiện tại -> lấy ngay lập tức (0ms!)
       if (sessionAssetCache.has(memKey)) {
         const cached = sessionAssetCache.get(memKey);
         target.holder[target.key] = cached.qRef;
@@ -1115,7 +1121,7 @@
         continue;
       }
 
-      if (onProgress) onProgress(`Đang tách & nén trang đề/ảnh đính kèm lần đầu (${i + 1}/${imageTargets.length})...`);
+      if (onProgress) onProgress(`Đang tối ưu & nén ảnh / bài tập đính kèm (ảnh ${i + 1}/${imageTargets.length} trên ${totalPages} trang)...`);
 
       try {
         const webpBlob = await compressDataUrlToWebpBlob(rawDataUrl, 2000, 0.86);
