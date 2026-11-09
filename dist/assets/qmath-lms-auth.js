@@ -2338,24 +2338,6 @@
         `<option value="ALL" ${defaultYear === 'ALL' ? 'selected' : ''}>Tất cả năm</option>`;
     }
 
-    const populateClassesForYear = (yr) => {
-      const visibleClasses = (yr === 'ALL') ? classesList : classesList.filter(c => c.academicYear === yr);
-      if (visibleClasses.length === 0) {
-        clsSelect.innerHTML = '<option value="">Không có lớp học nào trong năm này</option>';
-        populateLessonsForClass('');
-        return;
-      }
-      clsSelect.innerHTML = visibleClasses.map(c =>
-        `<option value="${c.id}" ${c.id === activeContext.classId ? 'selected' : ''}>${c.name}</option>`
-      ).join('');
-      populateLessonsForClass(clsSelect.value);
-    };
-
-    if (yearSelect) {
-      yearSelect.onchange = () => populateClassesForYear(yearSelect.value);
-    }
-    populateClassesForYear(yearSelect ? yearSelect.value : 'ALL');
-
     const populateLessonsForClass = (cid) => {
       const classLessons = allLessons
         .filter(l => l.classId === cid)
@@ -2380,6 +2362,24 @@
         }
       }
     };
+
+    const populateClassesForYear = (yr) => {
+      const visibleClasses = (yr === 'ALL') ? classesList : classesList.filter(c => c.academicYear === yr);
+      if (visibleClasses.length === 0) {
+        clsSelect.innerHTML = '<option value="">Không có lớp học nào trong năm này</option>';
+        populateLessonsForClass('');
+        return;
+      }
+      clsSelect.innerHTML = visibleClasses.map(c =>
+        `<option value="${c.id}" ${c.id === activeContext.classId ? 'selected' : ''}>${c.name}</option>`
+      ).join('');
+      populateLessonsForClass(clsSelect.value);
+    };
+
+    if (yearSelect) {
+      yearSelect.onchange = () => populateClassesForYear(yearSelect.value);
+    }
+    populateClassesForYear(yearSelect ? yearSelect.value : 'ALL');
 
     populateLessonsForClass(clsSelect.value);
     clsSelect.onchange = () => populateLessonsForClass(clsSelect.value);
