@@ -1891,11 +1891,19 @@
         </div>
 
         <div style="padding:20px 22px;max-height:78vh;overflow-y:auto;font-size:13px;color:#1e293b;">
-          <div style="margin-bottom:14px;">
-            <label style="font-weight:700;display:block;margin-bottom:5px;">1. Chọn Lớp học nhận bài giảng *</label>
-            <select id="qm-save-class" style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:13px;">
-              <option value="">Đang tải danh sách lớp học...</option>
-            </select>
+          <div style="display:grid;grid-template-columns:160px 1fr;gap:10px;margin-bottom:14px;">
+            <div>
+              <label style="font-weight:700;display:block;margin-bottom:5px;">Năm học</label>
+              <select id="qm-save-year-filter" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:13px;background:#fff;">
+                <option value="ALL">Tất cả năm học</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-weight:700;display:block;margin-bottom:5px;">1. Chọn Lớp học nhận bài giảng *</label>
+              <select id="qm-save-class" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:13px;background:#fff;">
+                <option value="">Đang tải danh sách lớp học...</option>
+              </select>
+            </div>
           </div>
 
           <div style="margin-bottom:14px;">
@@ -2258,14 +2266,52 @@
     let allLessons = [];
     try {
       const [clsRows, confRows] = await Promise.all([
-        sbSelect('classes', 'select=id,name,teacher_id,raw_data&order=created_at.desc'),
+        sbSelect('classes', 'select=id,name,teacher_id,academic_year,raw_data&order=created_at.desc'),
         sbSelect('configurations', 'select=id,raw_data&id=like.lesson_*')
       ]);
-      classesList = Array.isArray(clsRows) ? clsRows.map(r => ({
-        id: r.id,
-        name: r.name || r.raw_data?.name || 'Lớp học',
-        teacherId: r.teacher_id || r.raw_data?.teacherId || ''
-      })) : [];
+
+      const myUid = String(currentUser?.uid || currentUser?.id || '').trim();
+      const myEmail = String(currentUser?.email || '').trim().toLowerCase();
+      const isAdmin = currentUser?.isSuperAdmin || currentUser?.role === 'super_admin' || currentUser?.role === 'admin' ||
+        ['phamdinhquang0911@gmail.com', 'phamngockhanh.942001@gmail.com', 'phamngockhanh.942002@gmail.com', 'admin@gmail.com'].includes(myEmail);
+
+      let parsedClasses = (Array.isArray(clsRows) ? clsRows : []).map(r => {
+        const raw = r.raw_data || {};
+        const name = r.name || raw.name || 'Lớp học';
+        const teacherId = r.teacher_id || raw.teacherId || raw.created_by || '';
+        const teacherEmail = String(raw.teacherEmail || raw.email || '').toLowerCase();
+        let academicYear = r.academic_year || raw.academicYear || raw.school_year || raw.schoolYear || '';
+        if (!academicYear) {
+          const m = name.match(/(\d{2})[-–](\d{2})/);
+          if (m) academicYear = `20${m[1]}-20${m[2]}`;
+          else {
+            const m4 = name.match(/(20\d{2})[-–](20\d{2})/);
+            if (m4) academicYear = `${m4[1]}-${m4[2]}`;
+          }
+        }
+        if (!academicYear) academicYear = 'Khác';
+        return {
+          id: r.id,
+          name,
+          teacherId,
+          teacherEmail,
+          academicYear
+        };
+      });
+
+      // Nếu là super admin, chỉ hiển thị những lớp do chính tài khoản này tự tạo
+      if (isAdmin && (myUid || myEmail)) {
+        const ownClasses = parsedClasses.filter(c => {
+          const matchUid = myUid && c.teacherId === myUid;
+          const matchEmail = myEmail && c.teacherEmail === myEmail;
+          return matchUid || matchEmail;
+        });
+        if (ownClasses.length > 0) {
+          parsedClasses = ownClasses;
+        }
+      }
+
+      classesList = parsedClasses;
 
       allLessons = Array.isArray(confRows) ? confRows.map(r => ({
         id: r.raw_data?.id || r.id.replace(/^lesson_/, ''),
@@ -2275,16 +2321,40 @@
       console.warn('[openSaveToClassModal] Error loading classes:', e);
     }
 
+    const yearSelect = document.getElementById('qm-save-year-filter');
     const clsSelect = document.getElementById('qm-save-class');
     const lesSelect = document.getElementById('qm-save-existing-lesson');
 
-    if (classesList.length === 0) {
-      clsSelect.innerHTML = '<option value="">Chưa có lớp học nào trên hệ thống</option>';
-    } else {
-      clsSelect.innerHTML = classesList.map(c =>
+    // Extract unique academic years
+    const uniqueYears = Array.from(new Set(classesList.map(c => c.academicYear).filter(Boolean))).sort().reverse();
+    let defaultYear = uniqueYears[0] || 'ALL';
+    if (activeContext.classId) {
+      const activeCls = classesList.find(c => c.id === activeContext.classId);
+      if (activeCls && activeCls.academicYear) defaultYear = activeCls.academicYear;
+    }
+
+    if (yearSelect) {
+      yearSelect.innerHTML = uniqueYears.map(y => `<option value="${y}" ${y === defaultYear ? 'selected' : ''}>Năm ${y}</option>`).join('') +
+        `<option value="ALL" ${defaultYear === 'ALL' ? 'selected' : ''}>Tất cả năm</option>`;
+    }
+
+    const populateClassesForYear = (yr) => {
+      const visibleClasses = (yr === 'ALL') ? classesList : classesList.filter(c => c.academicYear === yr);
+      if (visibleClasses.length === 0) {
+        clsSelect.innerHTML = '<option value="">Không có lớp học nào trong năm này</option>';
+        populateLessonsForClass('');
+        return;
+      }
+      clsSelect.innerHTML = visibleClasses.map(c =>
         `<option value="${c.id}" ${c.id === activeContext.classId ? 'selected' : ''}>${c.name}</option>`
       ).join('');
+      populateLessonsForClass(clsSelect.value);
+    };
+
+    if (yearSelect) {
+      yearSelect.onchange = () => populateClassesForYear(yearSelect.value);
     }
+    populateClassesForYear(yearSelect ? yearSelect.value : 'ALL');
 
     const populateLessonsForClass = (cid) => {
       const classLessons = allLessons
@@ -2449,7 +2519,13 @@
         </div>
 
         <!-- FILTER & SEARCH BAR -->
-        <div style="padding:16px 26px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:grid;grid-template-columns:220px 200px 1fr;gap:12px;align-items:center;">
+        <div style="padding:16px 26px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:grid;grid-template-columns:140px 200px 180px 1fr;gap:12px;align-items:center;">
+          <div>
+            <label style="font-size:11px;font-weight:800;color:#64748b;display:block;margin-bottom:4px;text-transform:uppercase;">Năm học</label>
+            <select id="qm-open-year-filter" style="width:100%;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:13px;background:#fff;outline:none;">
+              <option value="ALL">Tất cả năm</option>
+            </select>
+          </div>
           <div>
             <label style="font-size:11px;font-weight:800;color:#64748b;display:block;margin-bottom:4px;text-transform:uppercase;">Lớp học</label>
             <select id="qm-open-class-filter" style="width:100%;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:13px;background:#fff;outline:none;">
@@ -2499,27 +2575,95 @@
 
     try {
       const [clsRows, confRows] = await Promise.all([
-        sbSelect('classes', 'select=id,name,raw_data&order=created_at.desc'),
+        sbSelect('classes', 'select=id,name,teacher_id,academic_year,raw_data&order=created_at.desc'),
         sbSelect('configurations', 'select=id,raw_data&id=like.lesson_*')
       ]);
+
+      const myUid = String(currentUser?.uid || currentUser?.id || '').trim();
+      const myEmail = String(currentUser?.email || '').trim().toLowerCase();
+      const isAdmin = currentUser?.isSuperAdmin || currentUser?.role === 'super_admin' || currentUser?.role === 'admin' ||
+        ['phamdinhquang0911@gmail.com', 'phamngockhanh.942001@gmail.com', 'phamngockhanh.942002@gmail.com', 'admin@gmail.com'].includes(myEmail);
+
+      let parsedClasses = (Array.isArray(clsRows) ? clsRows : []).map(r => {
+        const raw = r.raw_data || {};
+        const name = r.name || raw.name || 'Lớp học';
+        const teacherId = r.teacher_id || raw.teacherId || raw.created_by || '';
+        const teacherEmail = String(raw.teacherEmail || raw.email || '').toLowerCase();
+        let academicYear = r.academic_year || raw.academicYear || raw.school_year || raw.schoolYear || '';
+        if (!academicYear) {
+          const m = name.match(/(\d{2})[-–](\d{2})/);
+          if (m) academicYear = `20${m[1]}-20${m[2]}`;
+          else {
+            const m4 = name.match(/(20\d{2})[-–](20\d{2})/);
+            if (m4) academicYear = `${m4[1]}-${m4[2]}`;
+          }
+        }
+        if (!academicYear) academicYear = 'Khác';
+        return {
+          id: r.id,
+          name,
+          teacherId,
+          teacherEmail,
+          academicYear
+        };
+      });
+
+      // Nếu là super admin, chỉ hiển thị những lớp do chính tài khoản này tự tạo
+      if (isAdmin && (myUid || myEmail)) {
+        const ownClasses = parsedClasses.filter(c => {
+          const matchUid = myUid && c.teacherId === myUid;
+          const matchEmail = myEmail && c.teacherEmail === myEmail;
+          return matchUid || matchEmail;
+        });
+        if (ownClasses.length > 0) {
+          parsedClasses = ownClasses;
+        }
+      }
+
       const clsMap = {};
-      const classesList = Array.isArray(clsRows) ? clsRows.map(c => {
-        const name = c.name || c.raw_data?.name || 'Lớp học';
-        clsMap[c.id] = name;
-        return { id: c.id, name };
-      }) : [];
+      parsedClasses.forEach(c => { clsMap[c.id] = c.name; });
+      const classesList = parsedClasses;
+      const myClassIds = new Set(parsedClasses.map(c => c.id));
 
       const rawLessons = (confRows || [])
         .map(r => ({ id: r.raw_data?.id || r.id.replace(/^lesson_/, ''), ...(r.raw_data || {}) }))
-        .filter(l => l.r2Key)
+        .filter(l => l.r2Key && (!isAdmin || myClassIds.has(l.classId)))
         .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
 
+      const filterYear = document.getElementById('qm-open-year-filter');
       const filterCls = document.getElementById('qm-open-class-filter');
-      filterCls.innerHTML = '<option value="ALL">Tất cả lớp học (' + rawLessons.length + ' bài)</option>' +
-        Object.entries(clsMap).map(([cid, cname]) => {
-          const count = rawLessons.filter(l => l.classId === cid).length;
-          return `<option value="${cid}" ${cid === activeContext.classId ? 'selected' : ''}>${cname} (${count} bài)</option>`;
-        }).join('');
+
+      // Populate year filter
+      const uniqueYears = Array.from(new Set(classesList.map(c => c.academicYear).filter(Boolean))).sort().reverse();
+      let defaultYear = uniqueYears[0] || 'ALL';
+      if (activeContext.classId) {
+        const activeCls = classesList.find(c => c.id === activeContext.classId);
+        if (activeCls && activeCls.academicYear) defaultYear = activeCls.academicYear;
+      }
+
+      if (filterYear) {
+        filterYear.innerHTML = uniqueYears.map(y => `<option value="${y}" ${y === defaultYear ? 'selected' : ''}>Năm ${y}</option>`).join('') +
+          `<option value="ALL" ${defaultYear === 'ALL' ? 'selected' : ''}>Tất cả năm</option>`;
+      }
+
+      const populateClassesForOpenModal = (yr) => {
+        const visibleClasses = (yr === 'ALL') ? classesList : classesList.filter(c => c.academicYear === yr);
+        filterCls.innerHTML = '<option value="ALL">Tất cả lớp học (' + visibleClasses.length + ' lớp)</option>' +
+          visibleClasses.map(c => {
+            const count = rawLessons.filter(l => l.classId === c.id).length;
+            return `<option value="${c.id}" ${c.id === activeContext.classId ? 'selected' : ''}>${c.name} (${count} bài)</option>`;
+          }).join('');
+      };
+
+      if (filterYear) {
+        filterYear.onchange = () => {
+          populateClassesForOpenModal(filterYear.value);
+          updateChapters(filterCls.value);
+          renderList();
+        };
+      }
+
+      populateClassesForOpenModal(filterYear ? filterYear.value : 'ALL');
 
       // Populate Chapters filter
       const filterChap = document.getElementById('qm-open-chapter-filter');
