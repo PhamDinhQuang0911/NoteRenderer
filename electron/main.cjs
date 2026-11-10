@@ -7,9 +7,7 @@ try {
   app.commandLine.appendSwitch("disable-gpu-sandbox");
   app.commandLine.appendSwitch("disable-web-security");
   app.commandLine.appendSwitch("allow-running-insecure-content");
-  app.commandLine.appendSwitch("ignore-gpu-blocklist");
-  app.commandLine.appendSwitch("enable-gpu-rasterization");
-  app.commandLine.appendSwitch("enable-zero-copy");
+  app.commandLine.appendSwitch("disable-renderer-backgrounding");
 } catch (e) {}
 
 // 1. Override guard & license modules before appmain loads
